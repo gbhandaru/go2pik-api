@@ -1,8 +1,8 @@
 {
-  "name": "go2pik-backend",
+  "name": "go2pik-api",
   "version": "1.0.0",
   "private": true,
-  "main": "server.js",
+  "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
     "dev": "node server.js",
