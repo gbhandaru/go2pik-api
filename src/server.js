@@ -49,7 +49,7 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'go2pik-api' });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
