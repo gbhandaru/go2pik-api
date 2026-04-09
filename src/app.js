@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const config = require('./config/env');
 const buildCorsOptions = require('./config/cors');
-const requestLogger = require('./middlewares/requestLogger');
+const requestLogger = require(path.join(__dirname, 'middlewares', 'requestLogger'));
 const notFound = require('./middlewares/notFound');
 const errorHandler = require('./middlewares/errorHandler');
 
