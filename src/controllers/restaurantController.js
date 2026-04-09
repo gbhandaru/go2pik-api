@@ -1,0 +1,27 @@
+const asyncHandler = require('../utils/asyncHandler');
+const { getAllRestaurants, getRestaurantById, decorateRestaurant } = require('../services/restaurantService');
+
+const listRestaurants = asyncHandler(async (req, res) => {
+  const { city } = req.query;
+  const restaurants = await getAllRestaurants(city ? { city } : {});
+  res.json(restaurants.map(decorateRestaurant));
+});
+
+const getRestaurantMenu = asyncHandler(async (req, res) => {
+  const restaurant = await getRestaurantById(req.params.id);
+  res.json({
+    restaurant: {
+      id: restaurant.id,
+      name: restaurant.name,
+      cuisine: restaurant.cuisine,
+      location: restaurant.location,
+    },
+    categories: restaurant.categories,
+    menu: restaurant.menu,
+  });
+});
+
+module.exports = {
+  listRestaurants,
+  getRestaurantMenu,
+};

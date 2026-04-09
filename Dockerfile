@@ -4,7 +4,7 @@ FROM node:18-slim AS base
 # Create app directory
 WORKDIR /usr/src/app
 
-# Install dependencies first (leverage layer caching)
+# Install dependencies (leverage layer caching)
 COPY package*.json ./
 RUN npm install --omit=dev
 

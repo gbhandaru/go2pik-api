@@ -1,0 +1,69 @@
+const ApiError = require('../utils/errors');
+const {
+  fetchRestaurantsFromDb,
+  getFallbackRestaurants,
+  getFallbackRestaurantById,
+} = require('../repositories/restaurantRepository');
+
+function decorateMenuItem(item) {
+  const numericPrice = Number(item.price);
+  return {
+    ...item,
+    price: Number.isFinite(numericPrice) ? numericPrice : 0,
+  };
+}
+
+function decorateRestaurant(restaurant) {
+  const categories = (restaurant.categories || []).map((category) => ({
+    ...category,
+    items: (category.items || []).map(decorateMenuItem),
+  }));
+  return {
+    ...restaurant,
+    categories,
+    menu: (restaurant.menu || []).map(decorateMenuItem),
+  };
+}
+
+async function getAllRestaurants(filter = {}) {
+  try {
+    const restaurants = await fetchRestaurantsFromDb(filter);
+    if (restaurants.length === 0) {
+      return getFallbackRestaurants();
+    }
+    return restaurants;
+  } catch (error) {
+    console.warn('[restaurantService] falling back to static data', error.message);
+    return getFallbackRestaurants();
+  }
+}
+
+async function fetchRestaurantById(restaurantId) {
+  try {
+    const [restaurant] = await fetchRestaurantsFromDb({ restaurantId });
+    if (restaurant) {
+      return restaurant;
+    }
+    const fallback = getFallbackRestaurantById(restaurantId);
+    if (!fallback) {
+      throw ApiError.notFound('Restaurant not found');
+    }
+    return fallback;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    console.warn('[restaurantService] fallback for id', restaurantId, error.message);
+    const fallback = getFallbackRestaurantById(restaurantId);
+    if (!fallback) {
+      throw ApiError.notFound('Restaurant not found');
+    }
+    return fallback;
+  }
+}
+
+module.exports = {
+  getAllRestaurants,
+  getRestaurantById: async (id) => decorateRestaurant(await fetchRestaurantById(id)),
+  decorateRestaurant,
+};

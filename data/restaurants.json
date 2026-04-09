@@ -1,0 +1,82 @@
+{
+  "restaurants": [
+    {
+      "id": "biryani-junction",
+      "name": "Biryani Junction",
+      "cuisine": "South Indian",
+      "location": "Fremont",
+      "menu": [
+        {
+          "sku": "masala-dosa",
+          "name": "Crispy Masala Dosa",
+          "description": "Rice-lentil crepe stuffed with spiced potato masala, served with coconut chutney and tangy sambar.",
+          "price": 12
+        },
+        {
+          "sku": "mini-idli-podi",
+          "name": "Mini Idli with Gunpowder",
+          "description": "Bite-sized steamed idlis tossed in aromatic milagai podi and ghee.",
+          "price": 11
+        },
+        {
+          "sku": "filter-coffee",
+          "name": "Madras Filter Coffee",
+          "description": "Strong decoction coffee served piping hot in dabarah set.",
+          "price": 3
+        }
+      ]
+    },
+    {
+      "id": "kabab-express",
+      "name": "Kabab Express",
+      "cuisine": "Indian Street Food",
+      "location": "Brentwood",
+      "menu": [
+        {
+          "sku": "chicken-tikka-kebab",
+          "name": "Chicken Tikka Kebab",
+          "description": "Chicken Roasted with Indian Spices.",
+          "price": 12
+        },
+        {
+          "sku": "chicken-biryani",
+          "name": "Chicken Biryani",
+          "description": "Cooked Basmati Rice mixed with marinated chicken pieces .",
+          "price": 15
+        },
+        {
+          "sku": "lassi",
+          "name": "Kesar Badam Lassi",
+          "description": "Chilled saffron-almond yogurt drink.",
+          "price": 90
+        }
+      ]
+    },
+    {
+      "id": "bheemavaram-ruchulu",
+      "name": "Bheemavaram Ruchulu",
+      "cuisine": "Modern South Indian",
+      "location": "Fremont",
+      "menu": [
+        {
+          "sku": "smoked-butter-chicken",
+          "name": "Smoked Butter Chicken",
+          "description": "Tandoor-smoked chicken tikka finished in velvety tomato-makhani sauce.",
+          "price": 16
+        },
+        {
+          "sku": "achari-paneer-tikka",
+          "name": "Achari Paneer Tikka",
+          "description": "Pickle-spiced cottage cheese skewers with mint chutney.",
+          "price": 12
+        },
+        {
+          "sku": "truffle-naan",
+          "name": "Black Truffle Naan",
+          "description": "Charcoal-fired naan brushed with truffle ghee and sea salt.",
+          "price": 2
+        }
+      ]
+    }
+  ]
+}
