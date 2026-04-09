@@ -1,17 +1,8 @@
-const express = require('express');
-const app = express();
+const config = require('./config/env');
+const app = require('./app');
 
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'go2pik-api' });
-});
+const { port, host } = config.server;
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'go2pik-api' });
-});
-
-const PORT = process.env.PORT || 8080;
-const HOST = '0.0.0.0';
-
-app.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
+app.listen(port, host, () => {
+  console.log(`Server running on http://${host}:${port}`);
 });
