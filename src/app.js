@@ -1,9 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const config = require('./config/env');
 const buildCorsOptions = require('./config/cors');
-const requestLogger = require(path.join(__dirname, 'middlewares', 'requestLogger'));
 const notFound = require('./middlewares/notFound');
 const errorHandler = require('./middlewares/errorHandler');
 
@@ -18,7 +16,12 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
-app.use(requestLogger);
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    console.log(`${req.method} ${req.originalUrl} ${res.statusCode}`);
+  });
+  next();
+});
 app.use(cors(buildCorsOptions()));
 app.use(express.json());
 
