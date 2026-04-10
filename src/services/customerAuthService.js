@@ -14,6 +14,8 @@ const {
   createCustomer,
   findCustomerWithSensitiveByEmail,
   findCustomerById,
+  updateCustomer,
+  deriveFullNameFromEmail,
 } = require('./customerService');
 
 async function signupCustomer(payload = {}) {
@@ -83,9 +85,42 @@ async function issueCustomerTokens(customer) {
   };
 }
 
+async function updateCustomerProfileByEmail(payload = {}) {
+  const { email, password, full_name: fullName, phone, new_email: newEmail } = payload;
+  if (!email || !password) {
+    throw ApiError.badRequest('email and password are required');
+  }
+  const record = await findCustomerWithSensitiveByEmail(email);
+  if (!record) {
+    throw ApiError.notFound('Customer not found');
+  }
+  const updates = {
+    password,
+  };
+  const nameSourceEmail = newEmail !== undefined ? newEmail : record.email;
+  const resolvedFullName = (() => {
+    if (typeof fullName === 'string' && fullName.trim() !== '') {
+      return fullName;
+    }
+    return deriveFullNameFromEmail(nameSourceEmail);
+  })();
+  if (resolvedFullName) {
+    updates.full_name = resolvedFullName;
+  }
+  if (phone !== undefined) {
+    updates.phone = phone;
+  }
+  if (newEmail !== undefined) {
+    updates.email = newEmail;
+  }
+  const customer = await updateCustomer(record.id, updates);
+  return { customer };
+}
+
 module.exports = {
   signupCustomer,
   loginCustomer,
   logoutCustomer,
   refreshCustomerSession,
+  updateCustomerProfileByEmail,
 };

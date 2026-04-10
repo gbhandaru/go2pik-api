@@ -10,20 +10,51 @@ const {
   deactivateCustomer: deactivateCustomerRepo,
 } = require('../repositories/customerRepository');
 
+const DEFAULT_PHONE_NUMBER = '111-111-1111';
+
 function normalizeEmail(email) {
   return email ? email.toLowerCase() : email;
 }
 
+function normalizePhone(phone) {
+  if (phone === undefined || phone === null) {
+    return DEFAULT_PHONE_NUMBER;
+  }
+  if (typeof phone === 'string' && phone.trim() === '') {
+    return DEFAULT_PHONE_NUMBER;
+  }
+  return phone;
+}
+
+function deriveFullNameFromEmail(email) {
+  if (!email) {
+    return null;
+  }
+  const [localPart] = String(email).split('@');
+  if (!localPart) {
+    return null;
+  }
+  return localPart.trim() || null;
+}
+
+function resolveFullName(fullName, email) {
+  if (typeof fullName === 'string' && fullName.trim() !== '') {
+    return fullName;
+  }
+  return deriveFullNameFromEmail(email);
+}
+
 async function createCustomer(payload = {}) {
-  const { full_name: fullName, phone = null, email, password } = payload;
-  if (!fullName || !email || !password) {
+  const { full_name: fullName, phone, email, password } = payload;
+  const resolvedFullName = resolveFullName(fullName, email);
+  if (!resolvedFullName || !email || !password) {
     throw ApiError.badRequest('full_name, email and password are required');
   }
   const passwordHash = await hashPassword(password);
   try {
     const row = await insertCustomer({
-      fullName,
-      phone,
+      fullName: resolvedFullName,
+      phone: normalizePhone(phone),
       email: normalizeEmail(email),
       passwordHash,
     });
@@ -37,15 +68,16 @@ async function createCustomer(payload = {}) {
 }
 
 async function createCustomerAdmin(payload = {}) {
-  const { full_name: fullName, phone = null, email, password } = payload;
-  if (!fullName || !email) {
+  const { full_name: fullName, phone, email, password } = payload;
+  const resolvedFullName = resolveFullName(fullName, email);
+  if (!resolvedFullName || !email) {
     throw ApiError.badRequest('full_name and email are required');
   }
   const passwordHash = password ? await hashPassword(password) : null;
   try {
     const row = await insertCustomerAdmin({
-      fullName,
-      phone,
+      fullName: resolvedFullName,
+      phone: normalizePhone(phone),
       email: normalizeEmail(email),
       passwordHash,
     });
@@ -111,4 +143,5 @@ module.exports = {
   findCustomerById,
   updateCustomer,
   deactivateCustomer,
+  deriveFullNameFromEmail,
 };

@@ -32,8 +32,37 @@ function array(value) {
     .filter(Boolean);
 }
 
+const DEFAULT_SENDGRID_API_KEY = '';
+const DEFAULT_SENDGRID_FROM_EMAIL = 'orders@go2pik.com';
+const DEFAULT_SENDGRID_FROM_NAME = 'Go2Pik';
+
+const stageAliasMap = {
+  development: 'local',
+  dev: 'local',
+  staging: 'preview',
+  stage: 'preview',
+  preview: 'preview',
+  production: 'production',
+  prod: 'production',
+};
+
+function resolveDeploymentStage() {
+  const raw =
+    process.env.APP_ENV || process.env.DEPLOYMENT_ENV || process.env.NODE_ENV || 'local';
+  const normalized = raw.toLowerCase();
+  return stageAliasMap[normalized] || normalized || 'local';
+}
+
+const deploymentStage = resolveDeploymentStage();
+
+function valueForStage(baseKey, fallback = '') {
+  const stageKey = `${baseKey}_${deploymentStage.toUpperCase()}`;
+  return process.env[stageKey] || process.env[baseKey] || fallback;
+}
+
 const config = {
   env: process.env.NODE_ENV || 'development',
+  deploymentStage,
   isTest,
   server: {
     host: process.env.HOST || '0.0.0.0',
@@ -64,6 +93,34 @@ const config = {
   orders: {
     defaultTaxRate: Number(process.env.DEFAULT_TAX_RATE || 0.08),
   },
+  notifications: (function buildNotificationsConfig() {
+  const sendgrid = {
+    apiKey: valueForStage('SENDGRID_API_KEY', DEFAULT_SENDGRID_API_KEY),
+    fromEmail: valueForStage('SENDGRID_FROM_EMAIL', DEFAULT_SENDGRID_FROM_EMAIL),
+    fromName: valueForStage('SENDGRID_FROM_NAME', DEFAULT_SENDGRID_FROM_NAME),
+  };
+    const providerOverride = process.env.NOTIFICATIONS_PROVIDER;
+    const provider = providerOverride || (sendgrid.apiKey ? 'sendgrid' : 'custom');
+    const baseFromEmail = sendgrid.fromEmail || process.env.EMAIL_FROM || 'no-reply@go2pik.com';
+    const baseFromName = sendgrid.fromName || process.env.EMAIL_FROM_NAME || 'Go2Pik Notifications';
+    return {
+      enabled: bool(process.env.NOTIFICATIONS_ENABLED, true),
+      provider,
+      providerUrl:
+        provider === 'sendgrid'
+          ? 'https://api.sendgrid.com/v3/mail/send'
+          : process.env.EMAIL_PROVIDER_URL || process.env.NOTIFICATION_PROVIDER_URL || '',
+      apiKey:
+        provider === 'sendgrid'
+          ? sendgrid.apiKey
+          : process.env.EMAIL_PROVIDER_API_KEY || process.env.NOTIFICATION_API_KEY || '',
+      fromEmail: baseFromEmail,
+      fromName: baseFromName,
+      timezone: process.env.NOTIFICATION_TIMEZONE || 'UTC',
+      timeoutMs: number(process.env.EMAIL_PROVIDER_TIMEOUT_MS, 8000),
+      sendgrid,
+    };
+  })(),
 };
 
 module.exports = config;

@@ -5,6 +5,7 @@ const {
   loginCustomer,
   logoutCustomer,
   refreshCustomerSession,
+  updateCustomerProfileByEmail,
 } = require('../services/customerAuthService');
 const { findCustomerById } = require('../services/customerService');
 const { verifyAccessToken } = require('../utils/token');
@@ -72,10 +73,19 @@ const profile = asyncHandler(async (req, res) => {
   res.json({ customer });
 });
 
+const updateProfile = asyncHandler(async (req, res) => {
+  const result = await updateCustomerProfileByEmail(req.body || {});
+  res.json({
+    message: 'Customer profile updated',
+    customer: result.customer,
+  });
+});
+
 module.exports = {
   register,
   login,
   logout,
   refresh,
   profile,
+  updateProfile,
 };
