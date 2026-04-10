@@ -32,7 +32,7 @@ function array(value) {
     .filter(Boolean);
 }
 
-const DEFAULT_SENDGRID_API_KEY = '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';
+const DEFAULT_SENDGRID_API_KEY = '';
 const DEFAULT_SENDGRID_FROM_EMAIL = 'orders@go2pik.com';
 const DEFAULT_SENDGRID_FROM_NAME = 'Go2Pik';
 
