@@ -3,6 +3,7 @@ const config = require('../config/env');
 const { runOrderAutomation } = require('../utils/automation');
 const { formatUsd } = require('../utils/currency');
 const { getRestaurantById } = require('./restaurantService');
+const { sendOrderConfirmationEmail } = require('./notificationService');
 const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
@@ -113,9 +114,11 @@ async function createOrder(payload = {}) {
     total,
   });
   const persisted = await getOrderById(orderId);
+  const notification = await sendOrderConfirmationEmail(persisted);
   return {
     order: persisted,
     automation: automationResult,
+    notification,
   };
 }
 

@@ -25,6 +25,15 @@ PGSSL=false
 ACCESS_TOKEN_SECRET=your-access-secret
 REFRESH_TOKEN_SECRET=your-refresh-secret
 DEFAULT_TAX_RATE=0.08
+NOTIFICATIONS_ENABLED=true
+EMAIL_PROVIDER_URL=https://api.emailprovider.com/send
+EMAIL_PROVIDER_API_KEY=super-secret-key
+EMAIL_FROM=no-reply@go2pik.com
+EMAIL_FROM_NAME=Go2Pik
+NOTIFICATION_TIMEZONE=America/New_York
+SENDGRID_API_KEY=Email Provider API key (if using SendGrid)
+SENDGRID_FROM_EMAIL=orders@go2pik.com
+SENDGRID_FROM_NAME=Go2Pik
 ```
 
 If `CORS_ORIGINS` is absent the server falls back to the built‑in allowlist:
@@ -36,6 +45,8 @@ https://www.go2pik.com
 https://go2pik.com
 https://go2pik-app--ui-preview-bwdknkqw.web.app
 ```
+
+Set `APP_ENV` (or `DEPLOYMENT_ENV`) to `local`, `preview`, or `production`. By default the same SendGrid credentials above are reused for every stage; optionally define `SENDGRID_API_KEY_<STAGE>`, `SENDGRID_FROM_EMAIL_<STAGE>`, or `SENDGRID_FROM_NAME_<STAGE>` if you need overrides. If a SendGrid API key is available for the active stage, the notification service automatically uses SendGrid; otherwise it falls back to the generic webhook provider configured via `EMAIL_PROVIDER_URL`/`EMAIL_PROVIDER_API_KEY`.
 
 ## Install & Run
 
@@ -64,6 +75,7 @@ All endpoints expect/return JSON and rely on the Postgres schema from the food-o
 - Token handling (access + refresh) is implemented locally via `src/utils/token.js` with DB persistence/fallback memory store in `src/repositories/tokenRepository.js`.
 - Order placement triggers a stub automation (`src/utils/automation.js`) that can be extended to real browser automation later.
 - Error handling is centralized (`src/middlewares/errorHandler.js`) to normalize responses and surface validation issues.
+- Order confirmations can trigger email notifications. Configure the provider via the `NOTIFICATIONS_*` env vars and the API will POST to your provider from `src/services/notificationService.js` after a successful order.
 
 ## Testing / Next Steps
 
