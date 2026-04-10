@@ -8,6 +8,7 @@ const createOrderController = asyncHandler(async (req, res) => {
     message: 'Order placed successfully',
     order: result.order,
     automation: result.automation,
+    notification: result.notification,
   });
 });
 
