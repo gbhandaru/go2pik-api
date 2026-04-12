@@ -3,6 +3,7 @@ const config = require('../config/env');
 const { runOrderAutomation } = require('../utils/automation');
 const { formatUsd } = require('../utils/currency');
 const { getRestaurantById } = require('./restaurantService');
+const { findCustomerById } = require('./customerService');
 const { sendOrderConfirmationEmail } = require('./notificationService');
 const {
   createOrder: createOrderRecord,
@@ -103,7 +104,7 @@ function formatOrderAmounts(order) {
 }
 
 async function createOrder(payload = {}) {
-  const { restaurantId, items = [], customer = {} } = payload;
+  const { restaurantId, items = [], customer = {}, customerId: rootCustomerId } = payload;
   if (!restaurantId) {
     throw ApiError.badRequest('restaurantId is required');
   }
@@ -113,6 +114,8 @@ async function createOrder(payload = {}) {
   const tax = Number((subtotal * DEFAULT_TAX_RATE).toFixed(2));
   const total = Number((subtotal + tax).toFixed(2));
   const derivedEmail = deriveEmailFromCustomer(customer);
+  const rawCandidateId = customer.id || rootCustomerId || customer.customerId;
+  const candidateCustomerId = rawCandidateId ? Number(rawCandidateId) : null;
   const normalizedCustomer = {
     ...customer,
     email: derivedEmail,
@@ -125,6 +128,25 @@ async function createOrder(payload = {}) {
           nameLooksLikeEmail: typeof customer.name === 'string' && customer.name.includes('@'),
         },
       });
+    } else if (Number.isFinite(candidateCustomerId)) {
+      const dbCustomer = await findCustomerById(candidateCustomerId);
+      if (dbCustomer?.email) {
+        normalizedCustomer.email = dbCustomer.email;
+        normalizedCustomer.name = normalizedCustomer.name || dbCustomer.full_name;
+        normalizedCustomer.phone = normalizedCustomer.phone || dbCustomer.phone;
+        console.log('[orderService] hydrated customer contact info from DB', {
+          customerId: candidateCustomerId,
+          emailPresent: true,
+        });
+      } else if (dbCustomer) {
+        console.warn('[orderService] customer record missing email', {
+          customerId: candidateCustomerId,
+        });
+      } else {
+        console.warn('[orderService] customer id referenced but not found', {
+          customerId: candidateCustomerId,
+        });
+      }
     } else {
       console.warn('[orderService] customer email missing and could not be derived', {
         customerName: customer.name,
