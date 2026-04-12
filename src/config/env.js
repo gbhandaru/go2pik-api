@@ -123,4 +123,15 @@ const config = {
   })(),
 };
 
+if (!isTest) {
+  const sendgridConfig = config.notifications?.sendgrid || {};
+  console.log('[config] SendGrid settings resolved', {
+    deploymentStage: config.deploymentStage,
+    provider: config.notifications?.provider,
+    sendgridApiKeyPresent: Boolean(sendgridConfig.apiKey),
+    sendgridFromEmail: sendgridConfig.fromEmail || null,
+    sendgridFromName: sendgridConfig.fromName || null,
+  });
+}
+
 module.exports = config;

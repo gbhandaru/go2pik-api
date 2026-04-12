@@ -121,6 +121,10 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
   if (!apiKey) {
     throw new Error('SendGrid API key missing');
   }
+  console.log('[notification] deliverViaSendgrid starting', {
+    to: to?.email,
+    subject,
+  });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -154,6 +158,10 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
       error.statusCode = response.status;
       throw error;
     }
+    console.log('[notification] deliverViaSendgrid completed', {
+      to: to?.email,
+      status: response.status,
+    });
     return { ok: true, response: bodyText, status: response.status };
   } finally {
     clearTimeout(timeout);
@@ -161,17 +169,72 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
 }
 
 async function deliverEmail(options) {
+  console.log('[notification] deliverEmail invoked', {
+    provider: config.notifications.provider,
+    to: options?.to?.email,
+    subject: options?.subject,
+  });
   if (config.notifications.provider === 'sendgrid') {
     return deliverViaSendgrid(options);
   }
   return deliverViaCustomProvider(options);
 }
 
+async function sendTestEmail(toEmail) {
+  console.log('[notification] sendTestEmail invoked', {
+    toEmail,
+    provider: config.notifications.provider,
+  });
+  if (!toEmail) {
+    const error = new Error('Query parameter "to" is required');
+    error.status = 400;
+    throw error;
+  }
+  if (config.notifications.provider !== 'sendgrid') {
+    const error = new Error('SendGrid provider is not enabled');
+    error.status = 400;
+    throw error;
+  }
+  if (!isEmailConfigured()) {
+    const error = new Error('Email notifications are not configured');
+    error.status = 400;
+    throw error;
+  }
+  const timestamp = new Date().toISOString();
+  const payload = {
+    to: { email: toEmail, name: 'Go2Pik Tester' },
+    subject: `Go2Pik SendGrid test @ ${timestamp}`,
+    text: `SendGrid connectivity test fired at ${timestamp}.`,
+    html: `<p>SendGrid connectivity test fired at <strong>${timestamp}</strong>.</p>`,
+    metadata: {
+      template: 'sendgrid_test',
+      triggeredBy: 'GET /test-email',
+      timestamp,
+    },
+  };
+  const result = await deliverViaSendgrid(payload);
+  console.log('[notification] sendTestEmail completed', {
+    toEmail,
+    status: result.status,
+  });
+  return { provider: 'sendgrid', status: result.status, response: result.response };
+}
+
 async function sendOrderConfirmationEmail(order) {
+  console.log('[notification] sendOrderConfirmationEmail called', {
+    orderNumber: order?.orderNumber,
+    customerEmail: order?.customer?.email,
+  });
   if (!order || !order.customer || !order.customer.email) {
+    console.log('[notification] skipping email delivery: missing customer email', {
+      orderNumber: order?.orderNumber,
+    });
     return { delivered: false, reason: 'missing_customer_email' };
   }
   if (!isEmailConfigured()) {
+    console.log('[notification] skipping email delivery: provider not configured', {
+      provider: config.notifications.provider,
+    });
     return { delivered: false, reason: 'not_configured' };
   }
   const { subject, textBody, htmlBody } = buildOrderEmail(order);
@@ -210,4 +273,5 @@ async function sendOrderConfirmationEmail(order) {
 module.exports = {
   sendOrderConfirmationEmail,
   isEmailConfigured,
+  sendTestEmail,
 };
