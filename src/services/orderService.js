@@ -11,6 +11,19 @@ const {
 
 const DEFAULT_TAX_RATE = Number(config.orders.defaultTaxRate || 0.08);
 
+function deriveEmailFromCustomer(customer = {}) {
+  const candidates = [customer.email, customer.username, customer.name];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (trimmed && trimmed.includes('@')) {
+        return trimmed.toLowerCase();
+      }
+    }
+  }
+  return null;
+}
+
 function normalizeMenuItems(items, restaurant) {
   if (!Array.isArray(items) || items.length === 0) {
     throw ApiError.badRequest('At least one item is required');
@@ -99,9 +112,28 @@ async function createOrder(payload = {}) {
   const subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const tax = Number((subtotal * DEFAULT_TAX_RATE).toFixed(2));
   const total = Number((subtotal + tax).toFixed(2));
+  const derivedEmail = deriveEmailFromCustomer(customer);
+  const normalizedCustomer = {
+    ...customer,
+    email: derivedEmail,
+  };
+  if (!customer.email) {
+    if (derivedEmail) {
+      console.log('[orderService] derived customer email for notification', {
+        sourceFields: {
+          usernamePresent: Boolean(customer.username),
+          nameLooksLikeEmail: typeof customer.name === 'string' && customer.name.includes('@'),
+        },
+      });
+    } else {
+      console.warn('[orderService] customer email missing and could not be derived', {
+        customerName: customer.name,
+      });
+    }
+  }
   const orderId = await createOrderRecord({
     restaurantId: restaurant.id,
-    customer,
+    customer: normalizedCustomer,
     items: normalizedItems,
     totals: { subtotal, tax, total },
   });
