@@ -114,6 +114,12 @@ async function createOrder(payload = {}) {
     total,
   });
   const persisted = await getOrderById(orderId);
+  console.log('[orderService] preparing notification', {
+    orderId,
+    orderNumber: persisted.orderNumber,
+    customerEmail: persisted.customer?.email,
+    notificationsProvider: config.notifications.provider,
+  });
   const notification = await sendOrderConfirmationEmail(persisted);
   return {
     order: persisted,

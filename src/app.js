@@ -4,6 +4,7 @@ const config = require('./config/env');
 const buildCorsOptions = require('./config/cors');
 const notFound = require('./middlewares/notFound');
 const errorHandler = require('./middlewares/errorHandler');
+const { sendTestEmail } = require('./services/notificationService');
 
 const customerAuthRoutes = require('./routes/customerAuthRoutes');
 const restaurantUserAuthRoutes = require('./routes/restaurantUserAuthRoutes');
@@ -36,6 +37,16 @@ app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'go2pik-api', env: config.env });
+});
+
+app.get('/test-email', async (req, res, next) => {
+  try {
+    const toEmail = req.query.to;
+    const result = await sendTestEmail(toEmail);
+    res.json({ message: 'Test email triggered', to: toEmail, provider: result.provider, status: result.status });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use(notFound);
