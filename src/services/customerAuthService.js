@@ -18,6 +18,7 @@ const {
   updateCustomer,
   deriveFullNameFromEmail,
 } = require('./customerService');
+const { sendWelcomeEmail } = require('./notificationService');
 
 async function signupCustomer(payload = {}) {
   console.log('[customerAuth] signupCustomer invoked', {
@@ -25,6 +26,14 @@ async function signupCustomer(payload = {}) {
     sendgridProviderConfigured: config.notifications?.provider === 'sendgrid',
   });
   const customer = await createCustomer(payload);
+  // Trigger welcome email immediately after successful signup
+  sendWelcomeEmail(customer).catch((error) => {
+    console.error('[customerAuth] sendWelcomeEmail error', {
+      customerId: customer?.id,
+      email: customer?.email,
+      error: error.message,
+    });
+  });
   const tokens = await issueCustomerTokens(customer);
   console.log('[customerAuth] signupCustomer completed', {
     customerId: customer.id,
