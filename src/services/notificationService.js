@@ -71,27 +71,6 @@ function buildOrderEmail(order) {
   return { subject, textBody, htmlBody };
 }
 
-function buildWelcomeEmail(customer = {}) {
-  const name = customer.name || customer.full_name || 'there';
-  const subject = 'Welcome to Go2Pik!';
-  const textBody = `Hi ${name},\n\n`
-    + 'Thanks for signing up with us! Your profile has been successfully created.\n\n'
-    + 'You can now log in anytime to access your account, update your details, and explore our services.\n\n'
-    + 'If you have any questions or need help getting started, feel free to reach out—we’re here to help.\n\n'
-    + 'Welcome aboard!\n\nBest regards,\nGo2Pik';
-  const htmlBody = `
-    <div style="font-family: Arial, Helvetica, sans-serif; color: #111;">
-      <p>Hi ${name},</p>
-      <p>Thanks for signing up with us! Your profile has been successfully created.</p>
-      <p>You can now log in anytime to access your account, update your details, and explore our services.</p>
-      <p>If you have any questions or need help getting started, feel free to reach out—we’re here to help.</p>
-      <p>Welcome aboard!</p>
-      <p>Best regards,<br/>Go2Pik</p>
-    </div>
-  `;
-  return { subject, textBody, htmlBody };
-}
-
 async function deliverViaCustomProvider({ to, subject, text, html, metadata }) {
   const {
     providerUrl,
@@ -142,6 +121,10 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
   if (!apiKey) {
     throw new Error('SendGrid API key missing');
   }
+  console.log('[notification] deliverViaSendgrid starting', {
+    to: to?.email,
+    subject,
+  });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -175,6 +158,10 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
       error.statusCode = response.status;
       throw error;
     }
+    console.log('[notification] deliverViaSendgrid completed', {
+      to: to?.email,
+      status: response.status,
+    });
     return { ok: true, response: bodyText, status: response.status };
   } finally {
     clearTimeout(timeout);
@@ -182,56 +169,72 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
 }
 
 async function deliverEmail(options) {
+  console.log('[notification] deliverEmail invoked', {
+    provider: config.notifications.provider,
+    to: options?.to?.email,
+    subject: options?.subject,
+  });
   if (config.notifications.provider === 'sendgrid') {
     return deliverViaSendgrid(options);
   }
   return deliverViaCustomProvider(options);
 }
 
-async function sendWelcomeEmail(customer = {}) {
-  console.log('[notification] sendWelcomeEmail called', {
-    customerId: customer?.id,
-    email: customer?.email,
+async function sendTestEmail(toEmail) {
+  console.log('[notification] sendTestEmail invoked', {
+    toEmail,
+    provider: config.notifications.provider,
   });
-  if (!customer || !customer.email) {
-    return { delivered: false, reason: 'missing_customer_email' };
+  if (!toEmail) {
+    const error = new Error('Query parameter "to" is required');
+    error.status = 400;
+    throw error;
+  }
+  if (config.notifications.provider !== 'sendgrid') {
+    const error = new Error('SendGrid provider is not enabled');
+    error.status = 400;
+    throw error;
   }
   if (!isEmailConfigured()) {
-    return { delivered: false, reason: 'not_configured' };
+    const error = new Error('Email notifications are not configured');
+    error.status = 400;
+    throw error;
   }
-  const { subject, textBody, htmlBody } = buildWelcomeEmail(customer);
-  try {
-    const result = await deliverEmail({
-      to: { email: customer.email, name: customer.name || customer.full_name || 'Customer' },
-      subject,
-      text: textBody,
-      html: htmlBody,
-      metadata: {
-        template: 'welcome_email',
-        customerId: customer.id,
-      },
-    });
-    console.log('[notification] welcome email delivered', {
-      customerId: customer.id,
-      email: customer.email,
-      status: result.status || 'ok',
-    });
-    return { delivered: true };
-  } catch (error) {
-    console.error('[notification] welcome email failed', {
-      customerId: customer.id,
-      email: customer.email,
-      error: error.message,
-    });
-    return { delivered: false, reason: 'provider_error', error: error.message };
-  }
+  const timestamp = new Date().toISOString();
+  const payload = {
+    to: { email: toEmail, name: 'Go2Pik Tester' },
+    subject: `Go2Pik SendGrid test @ ${timestamp}`,
+    text: `SendGrid connectivity test fired at ${timestamp}.`,
+    html: `<p>SendGrid connectivity test fired at <strong>${timestamp}</strong>.</p>`,
+    metadata: {
+      template: 'sendgrid_test',
+      triggeredBy: 'GET /test-email',
+      timestamp,
+    },
+  };
+  const result = await deliverViaSendgrid(payload);
+  console.log('[notification] sendTestEmail completed', {
+    toEmail,
+    status: result.status,
+  });
+  return { provider: 'sendgrid', status: result.status, response: result.response };
 }
 
 async function sendOrderConfirmationEmail(order) {
+  console.log('[notification] sendOrderConfirmationEmail called', {
+    orderNumber: order?.orderNumber,
+    customerEmail: order?.customer?.email,
+  });
   if (!order || !order.customer || !order.customer.email) {
+    console.log('[notification] skipping email delivery: missing customer email', {
+      orderNumber: order?.orderNumber,
+    });
     return { delivered: false, reason: 'missing_customer_email' };
   }
   if (!isEmailConfigured()) {
+    console.log('[notification] skipping email delivery: provider not configured', {
+      provider: config.notifications.provider,
+    });
     return { delivered: false, reason: 'not_configured' };
   }
   const { subject, textBody, htmlBody } = buildOrderEmail(order);
@@ -270,5 +273,5 @@ async function sendOrderConfirmationEmail(order) {
 module.exports = {
   sendOrderConfirmationEmail,
   isEmailConfigured,
-  sendWelcomeEmail,
+  sendTestEmail,
 };
