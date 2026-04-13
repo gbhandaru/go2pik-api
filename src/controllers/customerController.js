@@ -5,6 +5,7 @@ const {
   updateCustomer,
   deactivateCustomer,
 } = require('../services/customerService');
+const { sendWelcomeEmail } = require('../services/notificationService');
 
 const createCustomer = asyncHandler(async (req, res) => {
   const customer = await createCustomerAdmin(req.body || {});
@@ -29,9 +30,25 @@ const deactivateCustomerRecord = asyncHandler(async (req, res) => {
   res.json({ customer });
 });
 
+const sendWelcomeEmailController = asyncHandler(async (req, res) => {
+  const customer = await findCustomerById(req.params.id);
+  if (!customer) {
+    return res.status(404).json({ message: 'Customer not found' });
+  }
+  const notification = await sendWelcomeEmail(customer);
+  const statusCode = notification.delivered ? 200 : 400;
+  res.status(statusCode).json({
+    message: notification.delivered
+      ? 'Welcome email sent'
+      : `Welcome email not sent: ${notification.reason || 'unknown_reason'}`,
+    notification,
+  });
+});
+
 module.exports = {
   createCustomer,
   getCustomer,
   updateCustomer: updateCustomerRecord,
   deactivateCustomer: deactivateCustomerRecord,
+  sendWelcomeEmail: sendWelcomeEmailController,
 };

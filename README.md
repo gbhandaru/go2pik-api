@@ -31,7 +31,7 @@ EMAIL_PROVIDER_API_KEY=super-secret-key
 EMAIL_FROM=no-reply@go2pik.com
 EMAIL_FROM_NAME=Go2Pik
 NOTIFICATION_TIMEZONE=America/New_York
-SENDGRID_API_KEY=Email Provider API key (SendGrid)
+SENDGRID_API_KEY=Email Provider API key (if using SendGrid)
 SENDGRID_FROM_EMAIL=orders@go2pik.com
 SENDGRID_FROM_NAME=Go2Pik
 ```
