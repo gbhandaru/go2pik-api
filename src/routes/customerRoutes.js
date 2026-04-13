@@ -5,11 +5,13 @@ const {
   getCustomer,
   updateCustomer,
   deactivateCustomer,
+  sendWelcomeEmail,
 } = require('../controllers/customerController');
 
 router.post('/', createCustomer);
 router.get('/:id', getCustomer);
 router.put('/:id', updateCustomer);
 router.patch('/:id/deactivate', deactivateCustomer);
+router.post('/:id/welcome-email', sendWelcomeEmail);
 
 module.exports = router;

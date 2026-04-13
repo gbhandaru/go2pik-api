@@ -71,6 +71,27 @@ function buildOrderEmail(order) {
   return { subject, textBody, htmlBody };
 }
 
+function buildWelcomeEmail(customer = {}) {
+  const name = customer.name || customer.full_name || 'there';
+  const subject = 'Welcome to Go2Pik!';
+  const textBody = `Hi ${name},\n\n`
+    + 'Thanks for signing up with us! Your profile has been successfully created.\n\n'
+    + 'You can now log in anytime to access your account, update your details, and explore our services.\n\n'
+    + 'If you have any questions or need help getting started, feel free to reach out—we’re here to help.\n\n'
+    + 'Welcome aboard!\n\nBest regards,\nGo2Pik';
+  const htmlBody = `
+    <div style="font-family: Arial, Helvetica, sans-serif; color: #111;">
+      <p>Hi ${name},</p>
+      <p>Thanks for signing up with us! Your profile has been successfully created.</p>
+      <p>You can now log in anytime to access your account, update your details, and explore our services.</p>
+      <p>If you have any questions or need help getting started, feel free to reach out—we’re here to help.</p>
+      <p>Welcome aboard!</p>
+      <p>Best regards,<br/>Go2Pik</p>
+    </div>
+  `;
+  return { subject, textBody, htmlBody };
+}
+
 async function deliverViaCustomProvider({ to, subject, text, html, metadata }) {
   const {
     providerUrl,
@@ -167,6 +188,45 @@ async function deliverEmail(options) {
   return deliverViaCustomProvider(options);
 }
 
+async function sendWelcomeEmail(customer = {}) {
+  console.log('[notification] sendWelcomeEmail called', {
+    customerId: customer?.id,
+    email: customer?.email,
+  });
+  if (!customer || !customer.email) {
+    return { delivered: false, reason: 'missing_customer_email' };
+  }
+  if (!isEmailConfigured()) {
+    return { delivered: false, reason: 'not_configured' };
+  }
+  const { subject, textBody, htmlBody } = buildWelcomeEmail(customer);
+  try {
+    const result = await deliverEmail({
+      to: { email: customer.email, name: customer.name || customer.full_name || 'Customer' },
+      subject,
+      text: textBody,
+      html: htmlBody,
+      metadata: {
+        template: 'welcome_email',
+        customerId: customer.id,
+      },
+    });
+    console.log('[notification] welcome email delivered', {
+      customerId: customer.id,
+      email: customer.email,
+      status: result.status || 'ok',
+    });
+    return { delivered: true };
+  } catch (error) {
+    console.error('[notification] welcome email failed', {
+      customerId: customer.id,
+      email: customer.email,
+      error: error.message,
+    });
+    return { delivered: false, reason: 'provider_error', error: error.message };
+  }
+}
+
 async function sendOrderConfirmationEmail(order) {
   if (!order || !order.customer || !order.customer.email) {
     return { delivered: false, reason: 'missing_customer_email' };
@@ -210,4 +270,5 @@ async function sendOrderConfirmationEmail(order) {
 module.exports = {
   sendOrderConfirmationEmail,
   isEmailConfigured,
+  sendWelcomeEmail,
 };
