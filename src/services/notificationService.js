@@ -1,7 +1,6 @@
 const config = require('../config/env');
 const { formatUsd } = require('../utils/currency');
 
-
 function isEmailConfigured() {
   const { notifications } = config;
   if (!notifications || notifications.enabled === false) {
