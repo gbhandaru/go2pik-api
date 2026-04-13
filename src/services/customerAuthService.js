@@ -1,4 +1,5 @@
 const ApiError = require('../utils/errors');
+const config = require('../config/env');
 const {
   issueAccessToken,
   generateRefreshTokenValue,
@@ -20,6 +21,10 @@ const {
 const { sendWelcomeEmail } = require('./notificationService');
 
 async function signupCustomer(payload = {}) {
+  console.log('[customerAuth] signupCustomer invoked', {
+    email: payload.email,
+    sendgridProviderConfigured: config.notifications?.provider === 'sendgrid',
+  });
   const customer = await createCustomer(payload);
   // Trigger welcome email immediately after successful signup
   sendWelcomeEmail(customer).catch((error) => {
@@ -30,11 +35,19 @@ async function signupCustomer(payload = {}) {
     });
   });
   const tokens = await issueCustomerTokens(customer);
+  console.log('[customerAuth] signupCustomer completed', {
+    customerId: customer.id,
+    email: customer.email,
+  });
   return { customer, ...tokens };
 }
 
 async function loginCustomer(payload = {}) {
   const { email, password } = payload;
+  console.log('[customerAuth] loginCustomer invoked', {
+    email,
+    sendgridProviderConfigured: config.notifications?.provider === 'sendgrid',
+  });
   if (!email || !password) {
     throw ApiError.badRequest('email and password are required');
   }
@@ -51,6 +64,10 @@ async function loginCustomer(payload = {}) {
   }
   const customer = await findCustomerById(record.id);
   const tokens = await issueCustomerTokens(customer);
+  console.log('[customerAuth] loginCustomer issued tokens', {
+    customerId: customer.id,
+    email: customer.email,
+  });
   return { customer, ...tokens };
 }
 
