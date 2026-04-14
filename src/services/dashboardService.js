@@ -5,6 +5,15 @@ const {
   updateOrderStatus,
 } = require('../repositories/orderRepository');
 
+const SUPPORTED_ORDER_STATUSES = new Set([
+  'new',
+  'accepted',
+  'preparing',
+  'ready_for_pickup',
+  'completed',
+  'rejected',
+]);
+
 const STATUS_TRANSITIONS = new Set([
   'accepted',
   'preparing',
@@ -49,8 +58,17 @@ function decorateOrder(order) {
   };
 }
 
-async function getOrdersForRestaurant(restaurantId) {
-  const rows = await listOrdersForRestaurant(restaurantId);
+async function getOrdersForRestaurant(restaurantId, filters = {}) {
+  const rawStatus = filters.status;
+  const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : rawStatus;
+
+  if (status && !SUPPORTED_ORDER_STATUSES.has(status)) {
+    throw ApiError.badRequest(
+      `Unsupported status: ${status}. Supported statuses: ${Array.from(SUPPORTED_ORDER_STATUSES).join(', ')}`
+    );
+  }
+
+  const rows = await listOrdersForRestaurant(restaurantId, { status });
   return rows.map(mapOrder).map(decorateOrder);
 }
 
@@ -87,4 +105,5 @@ async function updateStatus(orderId, nextStatus, options = {}) {
 module.exports = {
   getOrdersForRestaurant,
   updateStatus,
+  SUPPORTED_ORDER_STATUSES: Array.from(SUPPORTED_ORDER_STATUSES),
 };

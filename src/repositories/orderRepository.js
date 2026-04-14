@@ -114,22 +114,44 @@ async function getOrderById(orderId) {
   return rows[0];
 }
 
-async function listOrdersForRestaurant(restaurantId) {
+async function listOrders({ restaurantId = null, status = null, limit = 200 } = {}) {
+  const whereClauses = [];
+  const params = [];
+
+  if (restaurantId !== null && restaurantId !== undefined && restaurantId !== '') {
+    params.push(Number(restaurantId));
+    whereClauses.push(`o.restaurant_id = $${params.length}`);
+  }
+
+  if (status) {
+    params.push(status);
+    whereClauses.push(`o.status = $${params.length}`);
+  }
+
+  params.push(limit);
+
   const query = `
     SELECT
       o.id,
       o.order_number,
-      o.status,
-      o.payment_status,
       o.customer_name,
       o.customer_phone,
+      o.customer_email,
+      o.pickup_time,
       o.notes,
       o.subtotal,
       o.tax_amount,
       o.total_amount,
+      o.status,
+      o.payment_mode,
+      o.payment_status,
       o.created_at,
-      o.pickup_time,
       o.completed_at,
+      r.id AS restaurant_id,
+      r.name AS restaurant_name,
+      r.cuisine_type,
+      r.city,
+      r.state,
       COALESCE(
         json_agg(
           json_build_object(
@@ -142,17 +164,22 @@ async function listOrdersForRestaurant(restaurantId) {
           )
           ORDER BY oi.id ASC
         ) FILTER (WHERE oi.id IS NOT NULL),
-        '[]'::json
+        '[]'
       ) AS items
     FROM orders o
+    JOIN restaurants r ON r.id = o.restaurant_id
     LEFT JOIN order_items oi ON oi.order_id = o.id
-    WHERE o.restaurant_id = $1
-    GROUP BY o.id
+    ${whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+    GROUP BY o.id, r.id
     ORDER BY o.created_at DESC
-    LIMIT 200;
+    LIMIT $${params.length};
   `;
-  const { rows } = await pool.query(query, [restaurantId]);
+  const { rows } = await pool.query(query, params);
   return rows;
+}
+
+async function listOrdersForRestaurant(restaurantId, { status = null } = {}) {
+  return listOrders({ restaurantId, status });
 }
 
 async function updateOrderStatus(orderId, updates) {
@@ -181,6 +208,7 @@ async function updateOrderStatus(orderId, updates) {
 module.exports = {
   createOrder: createOrderRecord,
   getOrderById,
+  listOrders,
   listOrdersForRestaurant,
   updateOrderStatus,
 };

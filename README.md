@@ -64,11 +64,28 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/customers`, `GET/PUT /api/customers/:id`, `PATCH /api/customers/:id/deactivate`
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
-- `POST /api/orders`, `GET /api/orders/:id`
+- `POST /api/orders`, `GET /api/orders`, `GET /api/orders/:id`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
 - Menu maintenance via `GET/POST /api/dashboard/restaurants/:restaurantId/menu` and `PUT/PATCH /api/dashboard/menu-items/:menuItemId`
 
 All endpoints expect/return JSON and rely on the Postgres schema from the food-order-app project. Fallback restaurant/menu data lives in `data/restaurants.json` to keep the app responsive when DB data is missing.
+
+Order status filters supported by `GET /api/orders` and `GET /api/dashboard/restaurants/:restaurantId/orders`:
+
+- `new`
+- `accepted`
+- `preparing`
+- `ready_for_pickup`
+- `completed`
+- `rejected`
+
+You can combine the status filter with `restaurantId` on `GET /api/orders`, for example:
+
+- `GET /api/orders?status=new&restaurantId=12`
+
+For restaurant-scoped filtering, use:
+
+- `GET /api/dashboard/restaurants/12/orders?status=new`
 
 ## Notes
 
