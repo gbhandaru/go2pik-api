@@ -3,7 +3,10 @@ const ApiError = require('../utils/errors');
 const { getOrdersForRestaurant, updateStatus } = require('../services/dashboardService');
 
 const listOrders = asyncHandler(async (req, res) => {
-  const orders = await getOrdersForRestaurant(req.params.restaurantId);
+  const { status = null } = req.query || {};
+  const orders = await getOrdersForRestaurant(req.params.restaurantId, {
+    status: status || null,
+  });
   res.json({ success: true, orders });
 });
 

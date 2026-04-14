@@ -8,9 +8,18 @@ const { sendOrderConfirmationEmail } = require('./notificationService');
 const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
+  listOrders: fetchOrders,
 } = require('../repositories/orderRepository');
 
 const DEFAULT_TAX_RATE = Number(config.orders.defaultTaxRate || 0.08);
+const SUPPORTED_ORDER_STATUSES = new Set([
+  'new',
+  'accepted',
+  'preparing',
+  'ready_for_pickup',
+  'completed',
+  'rejected',
+]);
 
 function deriveEmailFromCustomer(customer = {}) {
   const candidates = [customer.email, customer.username, customer.name];
@@ -190,7 +199,34 @@ async function getOrderById(orderId) {
   return formatOrderAmounts(enrichOrderRow(row));
 }
 
+async function getOrders(filters = {}) {
+  const rawStatus = filters.status;
+  const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : rawStatus;
+  const rawRestaurantId = filters.restaurantId;
+  const restaurantId =
+    rawRestaurantId === null || rawRestaurantId === undefined || rawRestaurantId === ''
+      ? null
+      : Number(rawRestaurantId);
+
+  if (restaurantId !== null && !Number.isFinite(restaurantId)) {
+    throw ApiError.badRequest('restaurantId must be a number');
+  }
+
+  if (status && !SUPPORTED_ORDER_STATUSES.has(status)) {
+    throw ApiError.badRequest(
+      `Unsupported status: ${status}. Supported statuses: ${Array.from(SUPPORTED_ORDER_STATUSES).join(', ')}`
+    );
+  }
+  const rows = await fetchOrders({
+    status,
+    restaurantId,
+  });
+  return rows.map(enrichOrderRow).map(formatOrderAmounts);
+}
+
 module.exports = {
   createOrder,
   getOrderById,
+  getOrders,
+  SUPPORTED_ORDER_STATUSES: Array.from(SUPPORTED_ORDER_STATUSES),
 };

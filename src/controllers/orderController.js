@@ -1,5 +1,5 @@
 const asyncHandler = require('../utils/asyncHandler');
-const { createOrder, getOrderById } = require('../services/orderService');
+const { createOrder, getOrderById, getOrders } = require('../services/orderService');
 const { verifyAccessToken } = require('../utils/token');
 const { findCustomerById } = require('../services/customerService');
 
@@ -53,6 +53,15 @@ const createOrderController = asyncHandler(async (req, res) => {
   });
 });
 
+const listOrdersController = asyncHandler(async (req, res) => {
+  const { status = null, restaurantId = null } = req.query || {};
+  const orders = await getOrders({
+    status: status || null,
+    restaurantId: restaurantId || null,
+  });
+  res.json({ success: true, orders });
+});
+
 const getOrderController = asyncHandler(async (req, res) => {
   const order = await getOrderById(req.params.id);
   res.json({ success: true, order });
@@ -60,5 +69,6 @@ const getOrderController = asyncHandler(async (req, res) => {
 
 module.exports = {
   createOrder: createOrderController,
+  listOrders: listOrdersController,
   getOrder: getOrderController,
 };
