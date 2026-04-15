@@ -1,14 +1,33 @@
 const pool = require('../config/db');
 
-function generateOrderNumber() {
-  return `FO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
-
 async function createOrderRecord({ restaurantId, customer, items, totals }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const params = [
+      Number(restaurantId),
+      customer.name || 'Guest',
+      customer.phone || '',
+      customer.email || null,
+      customer.pickupTime ? new Date(customer.pickupTime) : null,
+      customer.notes || null,
+      totals.subtotal,
+      totals.tax,
+      totals.total,
+      customer.paymentMode || 'pay_at_restaurant',
+      'unpaid',
+      'new',
+    ];
     const query = `
+      WITH next_sequence AS (
+        INSERT INTO restaurant_order_counters (restaurant_id, last_order_sequence)
+        VALUES ($1, 1)
+        ON CONFLICT (restaurant_id)
+        DO UPDATE SET
+          last_order_sequence = restaurant_order_counters.last_order_sequence + 1,
+          updated_at = now()
+        RETURNING last_order_sequence
+      )
       INSERT INTO orders (
         restaurant_id,
         order_number,
@@ -23,24 +42,24 @@ async function createOrderRecord({ restaurantId, customer, items, totals }) {
         payment_mode,
         payment_status,
         status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING id;
+      )
+      SELECT
+        $1,
+        'R' || $1::text || '-' || LPAD(next_sequence.last_order_sequence::text, 5, '0'),
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12
+      FROM next_sequence
+      RETURNING id, order_number;
     `;
-    const params = [
-      Number(restaurantId),
-      generateOrderNumber(),
-      customer.name || 'Guest',
-      customer.phone || '',
-      customer.email || null,
-      customer.pickupTime ? new Date(customer.pickupTime) : null,
-      customer.notes || null,
-      totals.subtotal,
-      totals.tax,
-      totals.total,
-      customer.paymentMode || 'pay_at_restaurant',
-      'unpaid',
-      'new',
-    ];
     const { rows } = await client.query(query, params);
     const orderId = rows[0].id;
     const insertItem = `
