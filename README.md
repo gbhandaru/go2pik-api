@@ -67,6 +67,10 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/orders`, `GET /api/orders`, `GET /api/orders/:id`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
 - Menu maintenance via `GET/POST /api/dashboard/restaurants/:restaurantId/menu` and `PUT/PATCH /api/dashboard/menu-items/:menuItemId`
+- Menu category management via `GET/POST /api/dashboard/restaurants/:restaurantId/menu/categories` and `PUT /api/dashboard/restaurants/:restaurantId/menu/categories/:categoryId`
+- Bulk menu sync via `GET /api/dashboard/restaurants/:restaurantId/menu/export` and `POST /api/dashboard/restaurants/:restaurantId/menu/import`
+- OpenAPI spec for the menu endpoints: [`docs/openapi-menu.yaml`](/Users/Krprasa/Gap-Repos/Personal/go2pik-api/docs/openapi-menu.yaml)
+- Swagger UI for the menu spec: `GET /api/docs/menu`
 
 All endpoints expect/return JSON and rely on the Postgres schema from the food-order-app project. Fallback restaurant/menu data lives in `data/restaurants.json` to keep the app responsive when DB data is missing.
 

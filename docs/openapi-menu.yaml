@@ -1,0 +1,703 @@
+openapi: 3.0.3
+info:
+  title: Go2Pik API - Menu Management
+  version: 1.0.0
+  description: OpenAPI spec for menu category management and bulk menu export/import endpoints.
+servers:
+  - url: /api
+tags:
+  - name: Menu
+    description: Menu category and bulk sync operations
+paths:
+  /dashboard/restaurants/{restaurantId}/menu:
+    get:
+      tags: [Menu]
+      summary: List menu items for a restaurant
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Menu items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemsResponse'
+              example:
+                success: true
+                items:
+                  - id: 101
+                    category_id: 31
+                    name: Samosa
+                    description: Crispy pastry
+                    price: 8
+                    is_vegetarian: true
+                    is_vegan: false
+                    is_available: true
+                    display_order: 1
+    post:
+      tags: [Menu]
+      summary: Create a menu item
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemCreateRequest'
+            example:
+              name: Samosa
+              category_id: 31
+              description: Crispy pastry
+              price: 8
+              is_vegetarian: true
+              is_vegan: false
+              is_available: true
+      responses:
+        '201':
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemEnvelope'
+              example:
+                success: true
+                item:
+                  id: 101
+                  category_id: 31
+                  name: Samosa
+                  description: Crispy pastry
+                  price: 8
+                  is_vegetarian: true
+                  is_vegan: false
+                  is_available: true
+                  display_order: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /dashboard/restaurants/{restaurantId}/menu/categories:
+    get:
+      tags: [Menu]
+      summary: List menu categories for a restaurant
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Menu categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListCategoriesResponse'
+              example:
+                success: true
+                categories:
+                  - id: 31
+                    restaurant_id: 12
+                    name: Appetizers
+                    display_order: 2
+                    is_active: true
+    post:
+      tags: [Menu]
+      summary: Create a menu category
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuCategoryCreateRequest'
+            example:
+              name: Starters
+              display_order: 1
+              is_active: true
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryEnvelope'
+              example:
+                success: true
+                category:
+                  id: 31
+                  restaurant_id: 12
+                  name: Starters
+                  display_order: 1
+                  is_active: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /dashboard/restaurants/{restaurantId}/menu/categories/{categoryId}:
+    put:
+      tags: [Menu]
+      summary: Update a menu category
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - $ref: '#/components/parameters/CategoryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuCategoryUpdateRequest'
+            example:
+              name: Appetizers
+              display_order: 2
+              is_active: true
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryEnvelope'
+              example:
+                success: true
+                category:
+                  id: 31
+                  restaurant_id: 12
+                  name: Appetizers
+                  display_order: 2
+                  is_active: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dashboard/restaurants/{restaurantId}/menu/export:
+    get:
+      tags: [Menu]
+      summary: Export menu categories and items for a restaurant
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Menu export payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuExportResponse'
+              example:
+                success: true
+                restaurant:
+                  id: 12
+                  name: Restaurant Name
+                  cuisine: Indian
+                  location: Fremont, CA
+                categories:
+                  - id: 31
+                    restaurant_id: 12
+                    name: Appetizers
+                    display_order: 2
+                    is_active: true
+                    items:
+                      - id: 101
+                        category_id: 31
+                        name: Samosa
+                        description: Crispy pastry
+                        price: 8
+                        is_vegetarian: true
+                        is_vegan: false
+                        is_available: true
+                        display_order: 1
+                uncategorized_items: []
+  /dashboard/restaurants/{restaurantId}/menu/import:
+    post:
+      tags: [Menu]
+      summary: Bulk import menu categories and items
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuImportRequest'
+            example:
+              categories:
+                - id: 31
+                  name: Appetizers
+                  display_order: 2
+                  is_active: true
+                  items:
+                    - id: 101
+                      name: Samosa
+                      price: 8
+                      is_available: true
+              uncategorized_items:
+                - name: Mango Lassi
+                  price: 5
+                  is_available: true
+      responses:
+        '201':
+          description: Bulk import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuImportResponse'
+              example:
+                success: true
+                summary:
+                  categoriesCreated: 0
+                  categoriesUpdated: 1
+                  itemsCreated: 1
+                  itemsUpdated: 1
+                export:
+                  restaurant:
+                    id: 12
+                    name: Restaurant Name
+                    cuisine: Indian
+                    location: Fremont, CA
+                  categories: []
+                  uncategorized_items: []
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /dashboard/menu-items/{menuItemId}:
+    put:
+      tags: [Menu]
+      summary: Update a menu item
+      parameters:
+        - $ref: '#/components/parameters/MenuItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemUpdateRequest'
+            example:
+              name: Samosa Chaat
+              price: 9
+              is_available: true
+      responses:
+        '200':
+          description: Menu item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemEnvelope'
+              example:
+                success: true
+                item:
+                  id: 101
+                  category_id: 31
+                  name: Samosa Chaat
+                  description: Crispy pastry
+                  price: 9
+                  is_vegetarian: true
+                  is_vegan: false
+                  is_available: true
+                  display_order: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dashboard/menu-items/{menuItemId}/availability:
+    patch:
+      tags: [Menu]
+      summary: Update menu item availability
+      parameters:
+        - $ref: '#/components/parameters/MenuItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemAvailabilityRequest'
+            example:
+              is_available: false
+      responses:
+        '200':
+          description: Menu item availability updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemEnvelope'
+              example:
+                success: true
+                item:
+                  id: 101
+                  category_id: 31
+                  name: Samosa
+                  description: Crispy pastry
+                  price: 8
+                  is_vegetarian: true
+                  is_vegan: false
+                  is_available: false
+                  display_order: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  parameters:
+    RestaurantId:
+      name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Restaurant identifier.
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Menu category identifier.
+    MenuItemId:
+      name: menuItemId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Menu item identifier.
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        details:
+          nullable: true
+      required:
+        - message
+    MenuCategory:
+      type: object
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        restaurant_id:
+          oneOf:
+            - type: integer
+            - type: string
+        name:
+          type: string
+        display_order:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: 'null'
+        is_active:
+          type: boolean
+      required:
+        - id
+        - restaurant_id
+        - name
+        - is_active
+    MenuCategoryCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        display_order:
+          oneOf:
+            - type: integer
+            - type: string
+        is_active:
+          type: boolean
+      required:
+        - name
+    MenuCategoryUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        display_order:
+          oneOf:
+            - type: integer
+            - type: string
+        is_active:
+          type: boolean
+    MenuItemCreateRequest:
+      type: object
+      properties:
+        category_id:
+          oneOf:
+            - type: integer
+            - type: string
+        name:
+          type: string
+        description:
+          oneOf:
+            - type: string
+            - type: 'null'
+        price:
+          oneOf:
+            - type: number
+            - type: integer
+        is_vegetarian:
+          type: boolean
+        is_vegan:
+          type: boolean
+        is_available:
+          type: boolean
+      required:
+        - name
+        - price
+    MenuItemUpdateRequest:
+      type: object
+      properties:
+        category_id:
+          oneOf:
+            - type: integer
+            - type: string
+        name:
+          type: string
+        description:
+          oneOf:
+            - type: string
+            - type: 'null'
+        price:
+          oneOf:
+            - type: number
+            - type: integer
+        is_vegetarian:
+          type: boolean
+        is_vegan:
+          type: boolean
+        is_available:
+          type: boolean
+    MenuItemAvailabilityRequest:
+      type: object
+      properties:
+        is_available:
+          type: boolean
+      required:
+        - is_available
+    MenuItem:
+      type: object
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        category_id:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: 'null'
+        name:
+          type: string
+        description:
+          oneOf:
+            - type: string
+            - type: 'null'
+        price:
+          oneOf:
+            - type: number
+            - type: integer
+        is_vegetarian:
+          type: boolean
+        is_vegan:
+          type: boolean
+        is_available:
+          type: boolean
+        display_order:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: 'null'
+      required:
+        - id
+        - name
+        - price
+        - is_vegetarian
+        - is_vegan
+        - is_available
+    MenuItemsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+      required:
+        - success
+        - items
+    MenuItemEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        item:
+          $ref: '#/components/schemas/MenuItem'
+      required:
+        - success
+        - item
+    RestaurantSummary:
+      type: object
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+        name:
+          type: string
+        cuisine:
+          type: string
+        location:
+          type: string
+      required:
+        - id
+        - name
+    MenuExportCategory:
+      allOf:
+        - $ref: '#/components/schemas/MenuCategory'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MenuItem'
+    MenuExportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        restaurant:
+          $ref: '#/components/schemas/RestaurantSummary'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuExportCategory'
+        uncategorized_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+      required:
+        - success
+        - restaurant
+        - categories
+        - uncategorized_items
+    MenuExportPayload:
+      type: object
+      properties:
+        restaurant:
+          $ref: '#/components/schemas/RestaurantSummary'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuExportCategory'
+        uncategorized_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+      required:
+        - restaurant
+        - categories
+        - uncategorized_items
+    MenuImportCategoryItem:
+      allOf:
+        - $ref: '#/components/schemas/MenuItem'
+        - type: object
+          properties:
+            id:
+              oneOf:
+                - type: integer
+                - type: string
+                - type: 'null'
+    MenuImportCategory:
+      type: object
+      properties:
+        id:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: 'null'
+        name:
+          type: string
+        display_order:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: 'null'
+        is_active:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuImportCategoryItem'
+      required:
+        - name
+    MenuImportRequest:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuImportCategory'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuImportCategoryItem'
+        uncategorized_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuImportCategoryItem'
+    MenuImportSummary:
+      type: object
+      properties:
+        categoriesCreated:
+          type: integer
+        categoriesUpdated:
+          type: integer
+        itemsCreated:
+          type: integer
+        itemsUpdated:
+          type: integer
+      required:
+        - categoriesCreated
+        - categoriesUpdated
+        - itemsCreated
+        - itemsUpdated
+    MenuImportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summary:
+          $ref: '#/components/schemas/MenuImportSummary'
+        export:
+          $ref: '#/components/schemas/MenuExportPayload'
+      required:
+        - success
+        - summary
+        - export
+    ListCategoriesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuCategory'
+      required:
+        - success
+        - categories
+    CategoryEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        category:
+          $ref: '#/components/schemas/MenuCategory'
+      required:
+        - success
+        - category
