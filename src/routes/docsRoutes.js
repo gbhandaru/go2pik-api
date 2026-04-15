@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 
+
 const router = express.Router();
 const specPath = path.resolve(__dirname, '../../docs/openapi-menu.yaml');
 const specUrl = '/api/docs/menu/openapi.yaml';
