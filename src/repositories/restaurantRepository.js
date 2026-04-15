@@ -107,7 +107,7 @@ async function fetchRestaurantsFromDb({ restaurantId, city } = {}) {
       mi.is_vegan,
       mi.image_url
     FROM restaurants r
-    LEFT JOIN menu_items mi ON mi.restaurant_id = r.id AND mi.is_available = true
+    LEFT JOIN menu_items mi ON mi.restaurant_id = r.id AND mi.is_available = true AND mi.deleted_at IS NULL
     LEFT JOIN menu_categories mc ON mc.id = mi.category_id AND mc.is_active = true
     ${whereClause}
     ORDER BY r.name ASC, mc.display_order ASC NULLS LAST, mi.display_order ASC NULLS LAST, mi.id ASC;

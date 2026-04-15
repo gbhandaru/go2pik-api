@@ -14,6 +14,7 @@ const {
   createMenuItem,
   updateMenuItem,
   toggleMenuAvailability,
+  deleteMenuItem,
   createMenuCategory,
   updateMenuCategory,
   exportMenu,
@@ -35,5 +36,6 @@ router.post('/restaurants/:restaurantId/menu/categories', createMenuCategory);
 router.put('/restaurants/:restaurantId/menu/categories/:categoryId', updateMenuCategory);
 router.put('/menu-items/:menuItemId', updateMenuItem);
 router.patch('/menu-items/:menuItemId/availability', toggleMenuAvailability);
+router.delete('/menu-items/:menuItemId', deleteMenuItem);
 
 module.exports = router;

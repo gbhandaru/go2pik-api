@@ -19,6 +19,7 @@ async function listMenuItems(restaurantId, db = pool) {
       mi.display_order
     FROM menu_items mi
     WHERE mi.restaurant_id = $1
+      AND mi.deleted_at IS NULL
     ORDER BY mi.category_id ASC NULLS LAST, mi.display_order ASC, mi.id ASC;
   `;
   const { rows } = await runQuery(db, query, [restaurantId]);
@@ -66,6 +67,7 @@ async function updateMenuItem(menuItemId, fields, db = pool) {
     UPDATE menu_items
     SET ${updates.join(', ')}
     WHERE id = $${values.length}
+      AND deleted_at IS NULL
     RETURNING *;
   `;
   const { rows } = await runQuery(db, query, values);
@@ -85,7 +87,7 @@ async function getMenuItemById(menuItemId, restaurantId, db = pool) {
       mi.is_available,
       mi.display_order
     FROM menu_items mi
-    WHERE mi.id = $1 AND mi.restaurant_id = $2
+    WHERE mi.id = $1 AND mi.restaurant_id = $2 AND mi.deleted_at IS NULL
     LIMIT 1;
   `;
   const { rows } = await runQuery(db, query, [menuItemId, restaurantId]);
@@ -97,9 +99,23 @@ async function setMenuItemAvailability(menuItemId, isAvailable, db = pool) {
     UPDATE menu_items
     SET is_available = $1
     WHERE id = $2
+      AND deleted_at IS NULL
     RETURNING *;
   `;
   const { rows } = await runQuery(db, query, [isAvailable, menuItemId]);
+  return rows[0] || null;
+}
+
+async function deleteMenuItem(menuItemId, db = pool) {
+  const query = `
+    UPDATE menu_items
+    SET deleted_at = now(),
+        is_available = false
+    WHERE id = $1
+      AND deleted_at IS NULL
+    RETURNING *;
+  `;
+  const { rows } = await runQuery(db, query, [menuItemId]);
   return rows[0] || null;
 }
 
@@ -200,6 +216,7 @@ module.exports = {
   updateMenuItem,
   getMenuItemById,
   setMenuItemAvailability,
+  deleteMenuItem,
   listMenuCategories,
   insertMenuCategory,
   updateMenuCategory,

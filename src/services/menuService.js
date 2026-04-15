@@ -6,6 +6,7 @@ const {
   updateMenuItem,
   getMenuItemById,
   setMenuItemAvailability,
+  deleteMenuItem,
   listMenuCategories,
   insertMenuCategory,
   updateMenuCategory,
@@ -92,6 +93,14 @@ async function editMenuItem(menuItemId, payload = {}) {
 
 async function toggleMenuItemAvailability(menuItemId, isAvailable) {
   const row = await setMenuItemAvailability(menuItemId, isAvailable);
+  if (!row) {
+    throw ApiError.notFound('Menu item not found');
+  }
+  return mapMenu(row);
+}
+
+async function removeMenuItem(menuItemId) {
+  const row = await deleteMenuItem(menuItemId);
   if (!row) {
     throw ApiError.notFound('Menu item not found');
   }
@@ -289,6 +298,7 @@ module.exports = {
   addMenuItem,
   editMenuItem,
   toggleMenuItemAvailability,
+  removeMenuItem,
   addMenuCategory,
   editMenuCategory,
   getMenuExport,
