@@ -21,8 +21,9 @@ async function createOrderRecord({ restaurantId, customer, items, totals }) {
         tax_amount,
         total_amount,
         payment_mode,
-        payment_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        payment_status,
+        status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id;
     `;
     const params = [
@@ -38,6 +39,7 @@ async function createOrderRecord({ restaurantId, customer, items, totals }) {
       totals.total,
       customer.paymentMode || 'pay_at_restaurant',
       'unpaid',
+      'new',
     ];
     const { rows } = await client.query(query, params);
     const orderId = rows[0].id;
@@ -125,7 +127,7 @@ async function listOrders({ restaurantId = null, status = null, limit = 200 } = 
 
   if (status) {
     params.push(status);
-    whereClauses.push(`o.status = $${params.length}`);
+    whereClauses.push(`LOWER(o.status) = LOWER($${params.length})`);
   }
 
   params.push(limit);
