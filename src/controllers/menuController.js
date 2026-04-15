@@ -6,6 +6,7 @@ const {
   addMenuItem,
   editMenuItem,
   toggleMenuItemAvailability,
+  removeMenuItem,
   addMenuCategory,
   editMenuCategory,
   getMenuExport,
@@ -38,6 +39,11 @@ const toggleMenuAvailability = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'is_available boolean is required' });
   }
   const item = await toggleMenuItemAvailability(req.params.menuItemId, isAvailable);
+  res.json({ success: true, item });
+});
+
+const deleteMenuItemRecord = asyncHandler(async (req, res) => {
+  const item = await removeMenuItem(req.params.menuItemId);
   res.json({ success: true, item });
 });
 
@@ -75,6 +81,7 @@ module.exports = {
   createMenuItem,
   updateMenuItem: updateMenuItemRecord,
   toggleMenuAvailability,
+  deleteMenuItem: deleteMenuItemRecord,
   createMenuCategory,
   updateMenuCategory: updateMenuCategoryRecord,
   exportMenu,
