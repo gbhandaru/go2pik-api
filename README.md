@@ -69,6 +69,42 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - Menu maintenance via `GET/POST /api/dashboard/restaurants/:restaurantId/menu` and `PUT/PATCH /api/dashboard/menu-items/:menuItemId`
 - Menu category management via `GET/POST /api/dashboard/restaurants/:restaurantId/menu/categories` and `PUT /api/dashboard/restaurants/:restaurantId/menu/categories/:categoryId`
 - Bulk menu sync via `GET /api/dashboard/restaurants/:restaurantId/menu/export` and `POST /api/dashboard/restaurants/:restaurantId/menu/import`
+
+The bulk import endpoint accepts either JSON or CSV.
+
+- JSON body can use `categories`, `items`, and `uncategorized_items`
+- CSV body should be sent as raw `text/csv` content to the same import endpoint
+- Multipart upload should send a file field named `file`
+- CSV columns supported:
+  - `category_id`
+  - `category_name`
+  - `category_display_order`
+  - `category_is_active`
+  - `item_id`
+  - `item_name`
+  - `item_description`
+  - `item_price`
+  - `item_is_available`
+  - `item_is_vegetarian`
+  - `item_is_vegan`
+  - `item_display_order`
+
+Example CSV:
+
+```csv
+category_id,category_name,category_display_order,category_is_active,item_id,item_name,item_description,item_price,item_is_available,item_is_vegetarian,item_is_vegan,item_display_order
+31,Appetizers,1,true,101,Samosa,Crispy pastry,8,true,true,false,1
+31,Appetizers,1,true,102,Pakora,Fried fritters,7,true,true,false,2
+,Beverages,2,true,,Mango Lassi,Sweet yogurt drink,5,true,true,false,1
+```
+
+Multipart upload example:
+
+```bash
+curl -X POST "http://localhost:3000/api/dashboard/restaurants/12/menu/import" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@menu.csv;type=text/csv"
+```
 - OpenAPI spec for the menu endpoints: [`docs/openapi-menu.yaml`](/Users/Krprasa/Gap-Repos/Personal/go2pik-api/docs/openapi-menu.yaml)
 - Swagger UI for the menu spec: `GET /api/docs/menu`
 

@@ -227,6 +227,23 @@ paths:
                 - name: Mango Lassi
                   price: 5
                   is_available: true
+          text/csv:
+            schema:
+              type: string
+            example: |
+              category_id,category_name,category_display_order,category_is_active,item_id,item_name,item_description,item_price,item_is_available,item_is_vegetarian,item_is_vegan,item_display_order
+              31,Appetizers,1,true,101,Samosa,Crispy pastry,8,true,true,false,1
+              31,Appetizers,1,true,102,Pakora,Fried fritters,7,true,true,false,2
+              ,Beverages,2,true,,Mango Lassi,Sweet yogurt drink,5,true,true,false,1
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+            example:
+              file: menu.csv
       responses:
         '201':
           description: Bulk import result

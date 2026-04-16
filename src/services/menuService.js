@@ -14,6 +14,216 @@ const {
 } = require('../repositories/menuRepository');
 const { getRestaurantById } = require('./restaurantService');
 
+function splitCsvLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === ',' && !inQuotes) {
+      values.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+
+  values.push(current);
+  return values.map((value) => value.trim());
+}
+
+function parseCsvText(csvText) {
+  const text = String(csvText || '').replace(/^\uFEFF/, '').trim();
+  if (!text) {
+    return [];
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  const headers = splitCsvLine(lines[0]).map((header) => header.toLowerCase());
+  return lines.slice(1).map((line) => {
+    const cells = splitCsvLine(line);
+    return headers.reduce((acc, header, index) => {
+      acc[header] = cells[index] !== undefined ? cells[index] : '';
+      return acc;
+    }, {});
+  });
+}
+
+function parseBoolean(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n'].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+function parseNumber(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function parseMenuImportCsv(csvText) {
+  const rows = parseCsvText(csvText);
+  if (rows.length === 0) {
+    throw ApiError.badRequest('CSV must contain a header row and at least one data row');
+  }
+
+  const categoriesByKey = new Map();
+  const categories = [];
+  const items = [];
+  const uncategorized_items = [];
+
+  rows.forEach((row) => {
+    const categoryId = parseNumber(row.category_id);
+    const categoryName = row.category_name || '';
+    const categoryDisplayOrder = parseNumber(row.category_display_order);
+    const categoryIsActive = parseBoolean(row.category_is_active);
+
+    const itemId = parseNumber(row.item_id);
+    const itemName = row.item_name || row.name || '';
+    const itemDescription = row.item_description || row.description || undefined;
+    const itemPrice = parseNumber(row.item_price || row.price);
+    const itemIsAvailable = parseBoolean(row.item_is_available || row.is_available);
+    const itemIsVegetarian = parseBoolean(row.item_is_vegetarian || row.is_vegetarian);
+    const itemIsVegan = parseBoolean(row.item_is_vegan || row.is_vegan);
+    const itemDisplayOrder = parseNumber(row.item_display_order || row.display_order);
+
+    const hasCategoryFields =
+      categoryName !== '' ||
+      categoryDisplayOrder !== undefined ||
+      categoryIsActive !== undefined;
+    const hasItemFields =
+      itemName !== '' ||
+      itemDescription !== undefined ||
+      itemPrice !== undefined ||
+      itemIsAvailable !== undefined ||
+      itemIsVegetarian !== undefined ||
+      itemIsVegan !== undefined ||
+      itemDisplayOrder !== undefined ||
+      itemId !== undefined;
+
+    let category = null;
+    if (hasCategoryFields) {
+      const categoryKey = categoryId !== undefined ? `id:${categoryId}` : `name:${categoryName.toLowerCase()}`;
+      category = categoriesByKey.get(categoryKey);
+      if (!category) {
+        category = {};
+        if (categoryId !== undefined) {
+          category.id = categoryId;
+        }
+        if (categoryName !== '') {
+          category.name = categoryName;
+        }
+        if (categoryDisplayOrder !== undefined) {
+          category.display_order = categoryDisplayOrder;
+        }
+        if (categoryIsActive !== undefined) {
+          category.is_active = categoryIsActive;
+        }
+        category.items = [];
+        categoriesByKey.set(categoryKey, category);
+        categories.push(category);
+      } else {
+        if (categoryId !== undefined && category.id === undefined) {
+          category.id = categoryId;
+        }
+        if (categoryName !== '') {
+          category.name = categoryName;
+        }
+        if (categoryDisplayOrder !== undefined) {
+          category.display_order = categoryDisplayOrder;
+        }
+        if (categoryIsActive !== undefined) {
+          category.is_active = categoryIsActive;
+        }
+      }
+    }
+
+    if (hasItemFields) {
+      const item = {};
+      if (itemId !== undefined) {
+        item.id = itemId;
+      }
+      if (itemName !== '') {
+        item.name = itemName;
+      }
+      if (itemDescription !== undefined) {
+        item.description = itemDescription;
+      }
+      if (itemPrice !== undefined) {
+        item.price = itemPrice;
+      }
+      if (itemIsAvailable !== undefined) {
+        item.is_available = itemIsAvailable;
+      }
+      if (itemIsVegetarian !== undefined) {
+        item.is_vegetarian = itemIsVegetarian;
+      }
+      if (itemIsVegan !== undefined) {
+        item.is_vegan = itemIsVegan;
+      }
+      if (itemDisplayOrder !== undefined) {
+        item.display_order = itemDisplayOrder;
+      }
+      if (categoryId !== undefined) {
+        item.category_id = categoryId;
+      }
+
+      if (category) {
+        category.items.push(item);
+      } else if (categoryId !== undefined) {
+        items.push(item);
+      } else {
+        uncategorized_items.push(item);
+      }
+    }
+  });
+
+  const categoryRows = categories.map((category) => {
+    const row = { ...category };
+    delete row.items;
+    return row;
+  });
+
+  return {
+    categories: categoryRows,
+    items,
+    uncategorized_items,
+    categoriesWithItems: categories,
+  };
+}
+
 function mapMenu(row) {
   if (!row) return null;
   return {
@@ -219,9 +429,19 @@ async function upsertMenuItemRecord(restaurantId, payload, db = pool, categoryId
 }
 
 async function importMenuBulk(restaurantId, payload = {}) {
-  const categoriesInput = Array.isArray(payload.categories) ? payload.categories : [];
-  const uncategorizedItemsInput = Array.isArray(payload.uncategorized_items) ? payload.uncategorized_items : [];
-  const itemsInput = Array.isArray(payload.items) ? payload.items : [];
+  const normalizedPayload =
+    typeof payload === 'string'
+      ? parseMenuImportCsv(payload)
+      : payload || {};
+  const categoriesInput = Array.isArray(normalizedPayload.categoriesWithItems)
+    ? normalizedPayload.categoriesWithItems
+    : Array.isArray(normalizedPayload.categories)
+      ? normalizedPayload.categories
+      : [];
+  const uncategorizedItemsInput = Array.isArray(normalizedPayload.uncategorized_items)
+    ? normalizedPayload.uncategorized_items
+    : [];
+  const itemsInput = Array.isArray(normalizedPayload.items) ? normalizedPayload.items : [];
 
   if (categoriesInput.length === 0 && uncategorizedItemsInput.length === 0 && itemsInput.length === 0) {
     throw ApiError.badRequest('categories, items, or uncategorized_items is required');
