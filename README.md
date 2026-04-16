@@ -130,6 +130,8 @@ For restaurant-scoped filtering, use:
 For the Completed tab, fetch only orders completed on a specific calendar day:
 
 - `GET /api/dashboard/restaurants/12/orders?status=completed&completedDate=2026-04-15`
+- Shortcut for today only:
+  - `GET /api/dashboard/restaurants/12/orders?status=completedToday`
 
 The completed-day filter uses the dashboard timezone, defaulting to `America/Los_Angeles` unless `DASHBOARD_TIMEZONE` is set.
 
