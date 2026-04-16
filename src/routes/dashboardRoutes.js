@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const {
   listOrders,
   acceptOrder,
@@ -21,6 +22,10 @@ const {
   importMenu,
 } = require('../controllers/menuController');
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
+
 router.get('/restaurants/:restaurantId/orders', listOrders);
 router.patch('/orders/:orderId/accept', acceptOrder);
 router.patch('/orders/:orderId/preparing', markPreparing);
@@ -30,7 +35,12 @@ router.patch('/orders/:orderId/reject', rejectOrder);
 router.get('/restaurants/:restaurantId/menu', listMenu);
 router.get('/restaurants/:restaurantId/menu/categories', listMenuCategories);
 router.get('/restaurants/:restaurantId/menu/export', exportMenu);
-router.post('/restaurants/:restaurantId/menu/import', importMenu);
+router.post(
+  '/restaurants/:restaurantId/menu/import',
+  express.text({ type: ['text/csv', 'application/csv', 'text/plain'] }),
+  upload.any(),
+  importMenu
+);
 router.post('/restaurants/:restaurantId/menu', createMenuItem);
 router.post('/restaurants/:restaurantId/menu/categories', createMenuCategory);
 router.put('/restaurants/:restaurantId/menu/categories/:categoryId', updateMenuCategory);

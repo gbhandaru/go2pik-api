@@ -17,6 +17,65 @@ function setNoStore(res) {
   res.set('Cache-Control', 'no-store');
 }
 
+function parseMaybeJson(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      return value;
+    }
+  }
+  return value;
+}
+
+function parseMultipartImportBody(req) {
+  const file = req.file || (Array.isArray(req.files) ? req.files[0] : null);
+  if (file && file.buffer) {
+    const raw = file.buffer.toString('utf8');
+    const mimeType = String(file.mimetype || '').toLowerCase();
+    const fileName = String(file.originalname || '').toLowerCase();
+    const looksLikeJson = mimeType.includes('json') || fileName.endsWith('.json');
+    const looksLikeCsv =
+      mimeType.includes('csv') ||
+      fileName.endsWith('.csv') ||
+      mimeType === 'text/plain' ||
+      mimeType.startsWith('text/');
+
+    if (looksLikeJson) {
+      return JSON.parse(raw);
+    }
+    if (looksLikeCsv || raw.includes(',')) {
+      return raw;
+    }
+    return raw;
+  }
+
+  const body = req.body || {};
+  if (typeof body === 'string') {
+    return body;
+  }
+
+  if (body.payload !== undefined) {
+    return parseMaybeJson(body.payload);
+  }
+
+  const normalized = { ...body };
+  ['categories', 'items', 'uncategorized_items'].forEach((key) => {
+    if (typeof normalized[key] === 'string') {
+      normalized[key] = parseMaybeJson(normalized[key]);
+    }
+  });
+
+  return normalized;
+}
+
 const listMenu = asyncHandler(async (req, res) => {
   setNoStore(res);
   const items = await getMenuItems(req.params.restaurantId);
@@ -70,15 +129,7 @@ const exportMenu = asyncHandler(async (req, res) => {
 });
 
 const importMenu = asyncHandler(async (req, res) => {
-  const payload = req.body || {};
-  const hasData =
-    Array.isArray(payload.categories) ||
-    Array.isArray(payload.items) ||
-    Array.isArray(payload.uncategorized_items);
-  if (!hasData) {
-    throw ApiError.badRequest('categories, items, or uncategorized_items is required');
-  }
-  const result = await importMenuBulk(req.params.restaurantId, payload);
+  const result = await importMenuBulk(req.params.restaurantId, parseMultipartImportBody(req));
   res.status(201).json({ success: true, ...result });
 });
 
