@@ -25,6 +25,19 @@ const STATUS_TRANSITIONS = new Set([
 const DASHBOARD_TIMEZONE = process.env.DASHBOARD_TIMEZONE || 'America/Los_Angeles';
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+function getDateStringInTimezone(date, timezone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  return `${year}-${month}-${day}`;
+}
+
 function mapOrder(row) {
   const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
   return {
@@ -68,23 +81,35 @@ async function getOrdersForRestaurant(restaurantId, filters = {}) {
     typeof filters.completedDate === 'string' && filters.completedDate.trim()
       ? filters.completedDate.trim()
       : null;
+  const isCompletedToday = status === 'completedtoday';
+  const effectiveStatus = isCompletedToday ? 'completed' : status;
+  const effectiveCompletedDate =
+    isCompletedToday || (effectiveStatus === 'completed' && !completedDate)
+      ? completedDate || getDateStringInTimezone(new Date(), DASHBOARD_TIMEZONE)
+      : completedDate;
 
-  if (status && !SUPPORTED_ORDER_STATUSES.has(status)) {
+  if (isCompletedToday && completedDate) {
+    throw ApiError.badRequest('completedToday does not accept completedDate');
+  }
+
+  if (effectiveStatus && !SUPPORTED_ORDER_STATUSES.has(effectiveStatus)) {
     throw ApiError.badRequest(
       `Unsupported status: ${status}. Supported statuses: ${Array.from(SUPPORTED_ORDER_STATUSES).join(', ')}`
     );
   }
 
-  if (completedDate && status !== 'completed') {
-    throw ApiError.badRequest('completedDate can only be used with status=completed');
+  if (effectiveCompletedDate && status !== 'completed') {
+    if (!isCompletedToday) {
+      throw ApiError.badRequest('completedDate can only be used with status=completed');
+    }
   }
-  if (completedDate && !ISO_DATE_RE.test(completedDate)) {
+  if (effectiveCompletedDate && !ISO_DATE_RE.test(effectiveCompletedDate)) {
     throw ApiError.badRequest('completedDate must be in YYYY-MM-DD format');
   }
 
   const rows = await listOrdersForRestaurant(restaurantId, {
-    status,
-    completedDate,
+    status: effectiveStatus,
+    completedDate: effectiveCompletedDate,
     timezone: DASHBOARD_TIMEZONE,
   });
   return rows.map(mapOrder).map(decorateOrder);
