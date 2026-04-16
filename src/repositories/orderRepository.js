@@ -135,7 +135,7 @@ async function getOrderById(orderId) {
   return rows[0];
 }
 
-async function listOrders({ restaurantId = null, status = null, limit = 200 } = {}) {
+async function listOrders({ restaurantId = null, status = null, completedDate = null, timezone = 'America/Los_Angeles', limit = 200 } = {}) {
   const whereClauses = [];
   const params = [];
 
@@ -147,6 +147,12 @@ async function listOrders({ restaurantId = null, status = null, limit = 200 } = 
   if (status) {
     params.push(status);
     whereClauses.push(`LOWER(o.status) = LOWER($${params.length})`);
+  }
+
+  if (completedDate) {
+    params.push(timezone);
+    params.push(completedDate);
+    whereClauses.push(`DATE(o.completed_at AT TIME ZONE $${params.length - 1}) = $${params.length}::date`);
   }
 
   params.push(limit);
@@ -199,8 +205,8 @@ async function listOrders({ restaurantId = null, status = null, limit = 200 } = 
   return rows;
 }
 
-async function listOrdersForRestaurant(restaurantId, { status = null } = {}) {
-  return listOrders({ restaurantId, status });
+async function listOrdersForRestaurant(restaurantId, { status = null, completedDate = null, timezone = 'America/Los_Angeles' } = {}) {
+  return listOrders({ restaurantId, status, completedDate, timezone });
 }
 
 async function updateOrderStatus(orderId, updates) {

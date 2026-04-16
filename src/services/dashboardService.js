@@ -22,6 +22,9 @@ const STATUS_TRANSITIONS = new Set([
   'rejected',
 ]);
 
+const DASHBOARD_TIMEZONE = process.env.DASHBOARD_TIMEZONE || 'America/Los_Angeles';
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function mapOrder(row) {
   const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
   return {
@@ -61,6 +64,10 @@ function decorateOrder(order) {
 async function getOrdersForRestaurant(restaurantId, filters = {}) {
   const rawStatus = filters.status;
   const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : rawStatus;
+  const completedDate =
+    typeof filters.completedDate === 'string' && filters.completedDate.trim()
+      ? filters.completedDate.trim()
+      : null;
 
   if (status && !SUPPORTED_ORDER_STATUSES.has(status)) {
     throw ApiError.badRequest(
@@ -68,7 +75,18 @@ async function getOrdersForRestaurant(restaurantId, filters = {}) {
     );
   }
 
-  const rows = await listOrdersForRestaurant(restaurantId, { status });
+  if (completedDate && status !== 'completed') {
+    throw ApiError.badRequest('completedDate can only be used with status=completed');
+  }
+  if (completedDate && !ISO_DATE_RE.test(completedDate)) {
+    throw ApiError.badRequest('completedDate must be in YYYY-MM-DD format');
+  }
+
+  const rows = await listOrdersForRestaurant(restaurantId, {
+    status,
+    completedDate,
+    timezone: DASHBOARD_TIMEZONE,
+  });
   return rows.map(mapOrder).map(decorateOrder);
 }
 
