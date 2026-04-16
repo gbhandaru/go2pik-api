@@ -57,7 +57,7 @@ function normalizeMenuItems(items, restaurant) {
       quantity,
       price,
       lineTotal,
-      notes: item.notes || null,
+      notes: item.notes || item.specialInstructions || item.special_instructions || null,
     };
   });
 }

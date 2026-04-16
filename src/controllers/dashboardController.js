@@ -3,13 +3,14 @@ const ApiError = require('../utils/errors');
 const { getOrdersForRestaurant, updateStatus } = require('../services/dashboardService');
 
 const listOrders = asyncHandler(async (req, res) => {
-  const { status = null, restaurantId: restaurantIdQuery = null } = req.query || {};
+  const { status = null, completedDate = null, restaurantId: restaurantIdQuery = null } = req.query || {};
   const restaurantId = req.params.restaurantId || restaurantIdQuery;
   if (!restaurantId) {
     throw ApiError.badRequest('restaurantId is required');
   }
   const orders = await getOrdersForRestaurant(restaurantId, {
     status: status || null,
+    completedDate: completedDate || null,
   });
   res.json({ success: true, orders });
 });
