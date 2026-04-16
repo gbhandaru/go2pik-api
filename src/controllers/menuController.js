@@ -13,12 +13,18 @@ const {
   importMenuBulk,
 } = require('../services/menuService');
 
+function setNoStore(res) {
+  res.set('Cache-Control', 'no-store');
+}
+
 const listMenu = asyncHandler(async (req, res) => {
+  setNoStore(res);
   const items = await getMenuItems(req.params.restaurantId);
   res.json({ success: true, items });
 });
 
 const listMenuCategoriesRecord = asyncHandler(async (req, res) => {
+  setNoStore(res);
   const categories = await getMenuCategories(req.params.restaurantId);
   res.json({ success: true, categories });
 });
@@ -58,6 +64,7 @@ const updateMenuCategoryRecord = asyncHandler(async (req, res) => {
 });
 
 const exportMenu = asyncHandler(async (req, res) => {
+  setNoStore(res);
   const payload = await getMenuExport(req.params.restaurantId);
   res.json({ success: true, ...payload });
 });
