@@ -41,23 +41,29 @@ function mapMenuCategory(row) {
 }
 
 function splitMenuItemPayload(payload = {}) {
-  const allowed = ['category_id', 'name', 'description', 'price', 'is_vegetarian', 'is_vegan', 'is_available'];
-  return allowed.reduce((acc, field) => {
-    if (payload[field] !== undefined) {
-      acc[field] = payload[field];
-    }
-    return acc;
-  }, {});
+  return {
+    ...(payload.category_id !== undefined ? { category_id: payload.category_id } : {}),
+    ...(payload.categoryId !== undefined ? { category_id: payload.categoryId } : {}),
+    ...(payload.name !== undefined ? { name: payload.name } : {}),
+    ...(payload.description !== undefined ? { description: payload.description } : {}),
+    ...(payload.price !== undefined ? { price: payload.price } : {}),
+    ...(payload.is_vegetarian !== undefined ? { is_vegetarian: payload.is_vegetarian } : {}),
+    ...(payload.isVegetarian !== undefined ? { is_vegetarian: payload.isVegetarian } : {}),
+    ...(payload.is_vegan !== undefined ? { is_vegan: payload.is_vegan } : {}),
+    ...(payload.isVegan !== undefined ? { is_vegan: payload.isVegan } : {}),
+    ...(payload.is_available !== undefined ? { is_available: payload.is_available } : {}),
+    ...(payload.isAvailable !== undefined ? { is_available: payload.isAvailable } : {}),
+  };
 }
 
 function splitMenuCategoryPayload(payload = {}) {
-  const allowed = ['name', 'display_order', 'is_active'];
-  return allowed.reduce((acc, field) => {
-    if (payload[field] !== undefined) {
-      acc[field] = payload[field];
-    }
-    return acc;
-  }, {});
+  return {
+    ...(payload.name !== undefined ? { name: payload.name } : {}),
+    ...(payload.display_order !== undefined ? { display_order: payload.display_order } : {}),
+    ...(payload.displayOrder !== undefined ? { display_order: payload.displayOrder } : {}),
+    ...(payload.is_active !== undefined ? { is_active: payload.is_active } : {}),
+    ...(payload.isActive !== undefined ? { is_active: payload.isActive } : {}),
+  };
 }
 
 async function getMenuItems(restaurantId) {
