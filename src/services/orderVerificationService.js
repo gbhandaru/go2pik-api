@@ -6,6 +6,14 @@ const { createVerificationSession, getVerificationSessionById, updateVerificatio
 const { createOrder, prepareOrderDraft } = require('./orderService');
 const { generateOtp, hashOtp, verifyOtp } = require('../utils/otp');
 
+function normalizePickupType(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'SCHEDULED') {
+    return 'SCHEDULED';
+  }
+  return 'ASAP';
+}
+
 function getExpiryDate() {
   return new Date(Date.now() + Number(config.verification.otpExpiryMinutes || 10) * 60 * 1000);
 }
@@ -90,7 +98,7 @@ async function startOrderVerification(payload = {}) {
     customerPhone,
     customerEmail: draft.customer?.email || null,
     restaurantId: draft.restaurantId,
-    pickupType: draft.customer?.pickupType || draft.customer?.pickup_type || 'pickup',
+    pickupType: normalizePickupType(draft.customer?.pickupType || draft.customer?.pickup_type),
     pickupTime: draft.customer?.pickupTime || draft.customer?.pickup_time || null,
     pendingOrderPayload: {
       ...draft,
