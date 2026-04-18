@@ -28,7 +28,6 @@ DEFAULT_TAX_RATE=0.08
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=your-twilio-auth-token
 TWILIO_PHONE_NUMBER=+15551234567
-TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 OTP_EXPIRY_MINUTES=10
 OTP_RESEND_COOLDOWN_SECONDS=30
 OTP_MAX_ATTEMPTS=5
@@ -151,7 +150,7 @@ The completed-day filter uses the dashboard timezone, defaulting to `America/Los
 - Order placement triggers a stub automation (`src/utils/automation.js`) that can be extended to real browser automation later.
 - Error handling is centralized (`src/middlewares/errorHandler.js`) to normalize responses and surface validation issues.
 - Order confirmations can trigger email notifications. Configure the provider via the `NOTIFICATIONS_*` env vars and the API will POST to your provider from `src/services/notificationService.js` after a successful order.
-- OTP verification is handled through Twilio Verify. The service uses `TWILIO_VERIFY_SERVICE_SID` plus the OTP timing values above to manage pending order verification sessions before the final order is created.
+- OTP verification is handled through Twilio SMS. The service uses `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` plus the OTP timing values above to manage pending order verification sessions before the final order is created.
 
 ### OTP Flow
 
@@ -175,7 +174,7 @@ The completed-day filter uses the dashboard timezone, defaulting to `America/Los
 ### Health Check
 
 - `GET /api/health/twilio-verify`
-  - Checks Twilio Verify configuration and fetches the Verify Service metadata
+  - Checks Twilio SMS configuration and fetches the Twilio account metadata
   - Response: `{ status, service, configured, reachable, otpLength, serviceDetails }`
 
 ## Testing / Next Steps
