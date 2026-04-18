@@ -176,13 +176,7 @@ async function confirmOrderVerification(sessionId, code) {
     throw ApiError.notFound('Verification session not found');
   }
   if (session.status === 'consumed' && session.orderId) {
-    const existingOrder = await getOrderById(session.orderId);
-    return {
-      verification: toSessionResponse(session),
-      order: existingOrder,
-      automation: null,
-      notification: null,
-    };
+    throw ApiError.conflict('Verification session has already been consumed');
   }
   if (session.status === 'processing') {
     throw ApiError.conflict('Verification is already being processed');
