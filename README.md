@@ -72,7 +72,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/customers`, `GET/PUT /api/customers/:id`, `GET /api/customers/:id/orders`, `PATCH /api/customers/:id/deactivate`
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
-- `POST /api/orders`, `GET /api/orders`, `GET /api/orders/:id`
+- `POST /api/orders` is disabled for direct client order creation; use the verification flow below. `GET /api/orders`, `GET /api/orders/:id`
 - `POST /api/orders/verification/start`, `POST /api/orders/verification/confirm`, `POST /api/orders/verification/resend`, `POST /api/orders/verification/test`
 - `GET /api/health/twilio-verify`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
@@ -161,6 +161,10 @@ The completed-day filter uses the dashboard timezone, defaulting to `America/Los
 2. `POST /api/orders/verification/confirm`
    - Body: `{ verificationId, code }`
    - Response: `{ success, message, verification, order, automation, notification }`
+   - Failure cases:
+     - wrong code: `400 Bad Request`
+     - expired code: `400 Bad Request`
+     - consumed session: `409 Conflict`
 3. `POST /api/orders/verification/resend`
    - Body: `{ verificationId }`
    - Response: `{ success, message, verification }`

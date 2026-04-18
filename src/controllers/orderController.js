@@ -1,21 +1,9 @@
 const asyncHandler = require('../utils/asyncHandler');
-const { createOrder, getOrderById, getOrders } = require('../services/orderService');
-const {
-  resolveAuthenticatedCustomer,
-  mergeAuthenticatedCustomerPayload,
-} = require('../utils/authenticatedCustomer');
+const ApiError = require('../utils/errors');
+const { getOrderById, getOrders } = require('../services/orderService');
 
 const createOrderController = asyncHandler(async (req, res) => {
-  const authCustomer = await resolveAuthenticatedCustomer(req);
-  const payload = mergeAuthenticatedCustomerPayload(req.body || {}, authCustomer);
-  const result = await createOrder(payload);
-  res.status(201).json({
-    success: true,
-    message: 'Order placed successfully',
-    order: result.order,
-    automation: result.automation,
-    notification: result.notification,
-  });
+  throw ApiError.forbidden('Direct order creation is disabled. Use /api/orders/verification/start and /confirm.');
 });
 
 const listOrdersController = asyncHandler(async (req, res) => {
