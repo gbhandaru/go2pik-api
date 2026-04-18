@@ -9,7 +9,16 @@ const twilioVerifyHealth = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Twilio Verify configuration is incomplete');
   }
 
+  console.log('[healthController] twilio verify health check requested', {
+    verifyServiceSid: verifyServiceSid ? `${verifyServiceSid.slice(0, 4)}...` : null,
+  });
+
   const service = await fetchVerifyServiceDetails();
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+  });
   res.json({
     status: 'ok',
     service: 'twilio-verify',
