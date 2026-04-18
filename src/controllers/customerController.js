@@ -5,6 +5,7 @@ const {
   updateCustomer,
   deactivateCustomer,
 } = require('../services/customerService');
+const { getOrdersForCustomer } = require('../services/orderService');
 const { sendWelcomeEmail } = require('../services/notificationService');
 
 const createCustomer = asyncHandler(async (req, res) => {
@@ -18,6 +19,15 @@ const getCustomer = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Customer not found' });
   }
   res.json({ customer });
+});
+
+const getCustomerOrders = asyncHandler(async (req, res) => {
+  const customer = await findCustomerById(req.params.id);
+  if (!customer) {
+    return res.status(404).json({ message: 'Customer not found' });
+  }
+  const orders = await getOrdersForCustomer(customer, req.query || {});
+  res.json({ customer, orders });
 });
 
 const updateCustomerRecord = asyncHandler(async (req, res) => {
@@ -48,6 +58,7 @@ const sendWelcomeEmailController = asyncHandler(async (req, res) => {
 module.exports = {
   createCustomer,
   getCustomer,
+  getCustomerOrders,
   updateCustomer: updateCustomerRecord,
   deactivateCustomer: deactivateCustomerRecord,
   sendWelcomeEmail: sendWelcomeEmailController,

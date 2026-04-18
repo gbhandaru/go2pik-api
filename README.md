@@ -61,7 +61,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 
 - `POST /api/auth/customers/signup|login|logout|refresh`, `GET /api/auth/customers/me` – customer auth
 - `POST /api/auth/restaurant-users/login|logout|refresh`, `GET /api/auth/restaurant-users/me` – restaurant staff auth
-- `POST /api/customers`, `GET/PUT /api/customers/:id`, `PATCH /api/customers/:id/deactivate`
+- `POST /api/customers`, `GET/PUT /api/customers/:id`, `GET /api/customers/:id/orders`, `PATCH /api/customers/:id/deactivate`
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
 - `POST /api/orders`, `GET /api/orders`, `GET /api/orders/:id`
