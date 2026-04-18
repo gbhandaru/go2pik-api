@@ -11,8 +11,23 @@ const {
 } = require('../utils/authenticatedCustomer');
 
 const start = asyncHandler(async (req, res) => {
+  const rawPhone = req.body?.customer?.phone || req.body?.phone || req.body?.customerPhone || null;
+  console.log('[orderVerificationController] verification start requested', {
+    hasCustomer: Boolean(req.body?.customer),
+    hasItems: Array.isArray(req.body?.items),
+    restaurantId: req.body?.restaurantId || null,
+    rawPhonePresent: Boolean(rawPhone),
+    rawPhoneMasked: rawPhone ? `***${String(rawPhone).replace(/\D/g, '').slice(-4)}` : null,
+    bodyKeys: Object.keys(req.body || {}),
+  });
   const authCustomer = await resolveAuthenticatedCustomer(req);
   const payload = mergeAuthenticatedCustomerPayload(req.body || {}, authCustomer);
+  console.log('[orderVerificationController] verification start merged payload', {
+    restaurantId: payload.restaurantId || null,
+    customerPhonePresent: Boolean(payload.customer?.phone),
+    customerPhoneMasked: payload.customer?.phone ? `***${String(payload.customer.phone).replace(/\D/g, '').slice(-4)}` : null,
+    customerKeys: Object.keys(payload.customer || {}),
+  });
   const result = await startOrderVerification(payload);
   res.status(201).json({
     success: true,
