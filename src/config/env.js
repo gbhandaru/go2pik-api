@@ -93,6 +93,18 @@ const config = {
   orders: {
     defaultTaxRate: Number(process.env.DEFAULT_TAX_RATE || 0.08),
   },
+  verification: {
+    otpExpiryMinutes: number(process.env.OTP_EXPIRY_MINUTES, 10),
+    otpResendCooldownSeconds: number(process.env.OTP_RESEND_COOLDOWN_SECONDS, 30),
+    otpMaxAttempts: number(process.env.OTP_MAX_ATTEMPTS, 5),
+    otpLength: number(process.env.OTP_LENGTH, 6),
+  },
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    authToken: process.env.TWILIO_AUTH_TOKEN || '',
+    phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+    verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || '',
+  },
   notifications: (function buildNotificationsConfig() {
   const sendgrid = {
     apiKey: valueForStage('SENDGRID_API_KEY', DEFAULT_SENDGRID_API_KEY),
