@@ -26,6 +26,14 @@ function mapVerification(row) {
   };
 }
 
+function normalizePickupType(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'SCHEDULED') {
+    return 'SCHEDULED';
+  }
+  return 'ASAP';
+}
+
 async function createVerificationSession(fields) {
   const query = `
     INSERT INTO order_verifications (
@@ -57,7 +65,7 @@ async function createVerificationSession(fields) {
     fields.customerPhone || fields.phone || null,
     fields.customerEmail || null,
     fields.restaurantId,
-    fields.pickupType || 'pickup',
+    normalizePickupType(fields.pickupType),
     fields.pickupTime || null,
     JSON.stringify(fields.pendingOrderPayload || {}),
     fields.otpHash || null,
