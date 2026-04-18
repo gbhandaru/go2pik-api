@@ -45,7 +45,16 @@ const resend = asyncHandler(async (req, res) => {
 });
 
 const test = asyncHandler(async (req, res) => {
+  console.log('[orderVerificationController] Twilio Verify test requested', {
+    hasPhone: Boolean(req.body?.phone || req.body?.customerPhone),
+  });
   const result = await testOrderVerificationService(req.body || {});
+  console.log('[orderVerificationController] Twilio Verify test result', {
+    hasVerification: Boolean(result.verification),
+    serviceSid: result.service?.sid || null,
+    otpLength: result.service?.codeLength || null,
+    ttl: result.service?.ttl || null,
+  });
   res.json({
     success: true,
     message: result.verification ? 'Twilio Verify test OTP sent successfully' : 'Twilio Verify service is configured',

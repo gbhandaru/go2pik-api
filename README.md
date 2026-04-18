@@ -176,7 +176,7 @@ The completed-day filter uses the dashboard timezone, defaulting to `America/Los
 
 - `GET /api/health/twilio-verify`
   - Checks Twilio Verify configuration and fetches the Verify Service metadata
-  - Response: `{ status, service, configured, reachable, serviceDetails }`
+  - Response: `{ status, service, configured, reachable, otpLength, serviceDetails }`
 
 ## Testing / Next Steps
 

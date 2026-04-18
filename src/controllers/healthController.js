@@ -15,6 +15,7 @@ const twilioVerifyHealth = asyncHandler(async (req, res) => {
     service: 'twilio-verify',
     configured: true,
     reachable: true,
+    otpLength: Number(config.verification?.otpLength || 6),
     serviceDetails: service,
   });
 });
