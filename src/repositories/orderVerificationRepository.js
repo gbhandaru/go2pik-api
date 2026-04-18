@@ -57,7 +57,7 @@ async function createVerificationSession(fields) {
     fields.customerPhone || fields.phone || null,
     fields.customerEmail || null,
     fields.restaurantId,
-    fields.pickupType || null,
+    fields.pickupType || 'pickup',
     fields.pickupTime || null,
     JSON.stringify(fields.pendingOrderPayload || {}),
     fields.otpHash || null,
