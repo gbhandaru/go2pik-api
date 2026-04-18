@@ -15,6 +15,7 @@ const restaurantUserRoutes = require('./routes/restaurantUserRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const docsRoutes = require('./routes/docsRoutes');
+const healthRoutes = require('./routes/healthRoutes');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/api/restaurant-users', restaurantUserRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/docs', docsRoutes);
+app.use('/api/health', healthRoutes);
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'go2pik-api', env: config.env });

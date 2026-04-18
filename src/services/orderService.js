@@ -114,6 +114,39 @@ function formatOrderAmounts(order) {
 }
 
 async function createOrder(payload = {}) {
+  const draft = await prepareOrderDraft(payload);
+  const { restaurant, customer, items, totals } = draft;
+  const { subtotal, tax, total } = totals;
+  const orderId = await createOrderRecord({
+    restaurantId: restaurant.id,
+    customer,
+    items,
+    totals,
+  });
+  const automationResult = await runOrderAutomation({
+    restaurant,
+    customer,
+    items,
+    subtotal,
+    tax,
+    total,
+  });
+  const persisted = await getOrderById(orderId);
+  console.log('[orderService] preparing notification', {
+    orderId,
+    orderNumber: persisted.orderNumber,
+    customerEmail: persisted.customer?.email,
+    notificationsProvider: config.notifications.provider,
+  });
+  const notification = await sendOrderConfirmationEmail(persisted);
+  return {
+    order: persisted,
+    automation: automationResult,
+    notification,
+  };
+}
+
+async function prepareOrderDraft(payload = {}) {
   const { restaurantId, items = [], customer = {}, customerId: rootCustomerId } = payload;
   if (!restaurantId) {
     throw ApiError.badRequest('restaurantId is required');
@@ -163,32 +196,13 @@ async function createOrder(payload = {}) {
       });
     }
   }
-  const orderId = await createOrderRecord({
+  return {
     restaurantId: restaurant.id,
+    restaurant,
     customer: normalizedCustomer,
+    customerId: candidateCustomerId,
     items: normalizedItems,
     totals: { subtotal, tax, total },
-  });
-  const automationResult = await runOrderAutomation({
-    restaurant,
-    customer,
-    items: normalizedItems,
-    subtotal,
-    tax,
-    total,
-  });
-  const persisted = await getOrderById(orderId);
-  console.log('[orderService] preparing notification', {
-    orderId,
-    orderNumber: persisted.orderNumber,
-    customerEmail: persisted.customer?.email,
-    notificationsProvider: config.notifications.provider,
-  });
-  const notification = await sendOrderConfirmationEmail(persisted);
-  return {
-    order: persisted,
-    automation: automationResult,
-    notification,
   };
 }
 
@@ -238,6 +252,7 @@ async function getOrdersForCustomer(customer = {}, filters = {}) {
 
 module.exports = {
   createOrder,
+  prepareOrderDraft,
   getOrderById,
   getOrders,
   getOrdersForCustomer,

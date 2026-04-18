@@ -25,6 +25,14 @@ PGSSL=false
 ACCESS_TOKEN_SECRET=your-access-secret
 REFRESH_TOKEN_SECRET=your-refresh-secret
 DEFAULT_TAX_RATE=0.08
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your-twilio-auth-token
+TWILIO_PHONE_NUMBER=+15551234567
+TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OTP_EXPIRY_MINUTES=10
+OTP_RESEND_COOLDOWN_SECONDS=30
+OTP_MAX_ATTEMPTS=5
+OTP_LENGTH=6
 NOTIFICATIONS_ENABLED=true
 EMAIL_PROVIDER_URL=https://api.emailprovider.com/send
 EMAIL_PROVIDER_API_KEY=super-secret-key
@@ -65,6 +73,8 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
 - `POST /api/orders`, `GET /api/orders`, `GET /api/orders/:id`
+- `POST /api/orders/verification/start`, `POST /api/orders/verification/confirm`, `POST /api/orders/verification/resend`, `POST /api/orders/verification/test`
+- `GET /api/health/twilio-verify`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
 - Menu maintenance via `GET/POST /api/dashboard/restaurants/:restaurantId/menu` and `PUT/PATCH /api/dashboard/menu-items/:menuItemId`
 - Menu category management via `GET/POST /api/dashboard/restaurants/:restaurantId/menu/categories` and `PUT /api/dashboard/restaurants/:restaurantId/menu/categories/:categoryId`
@@ -141,6 +151,28 @@ The completed-day filter uses the dashboard timezone, defaulting to `America/Los
 - Order placement triggers a stub automation (`src/utils/automation.js`) that can be extended to real browser automation later.
 - Error handling is centralized (`src/middlewares/errorHandler.js`) to normalize responses and surface validation issues.
 - Order confirmations can trigger email notifications. Configure the provider via the `NOTIFICATIONS_*` env vars and the API will POST to your provider from `src/services/notificationService.js` after a successful order.
+- OTP verification is handled through Twilio Verify. The service uses `TWILIO_VERIFY_SERVICE_SID` plus the OTP timing values above to manage pending order verification sessions before the final order is created.
+
+### OTP Flow
+
+1. `POST /api/orders/verification/start`
+   - Body: same order draft you would normally send to `POST /api/orders`
+   - Response: `{ success, message, verification }`
+2. `POST /api/orders/verification/confirm`
+   - Body: `{ verificationId, code }`
+   - Response: `{ success, message, verification, order, automation, notification }`
+3. `POST /api/orders/verification/resend`
+   - Body: `{ verificationId }`
+   - Response: `{ success, message, verification }`
+4. `POST /api/orders/verification/test`
+   - Body: optional `{ phone }`
+   - Response: `{ success, message, service, verification }`
+
+### Health Check
+
+- `GET /api/health/twilio-verify`
+  - Checks Twilio Verify configuration and fetches the Verify Service metadata
+  - Response: `{ status, service, configured, reachable, serviceDetails }`
 
 ## Testing / Next Steps
 
