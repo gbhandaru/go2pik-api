@@ -9,6 +9,7 @@ const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
   listOrders: fetchOrders,
+  listOrdersForCustomer: fetchOrdersForCustomer,
 } = require('../repositories/orderRepository');
 
 const DEFAULT_TAX_RATE = Number(config.orders.defaultTaxRate || 0.08);
@@ -224,9 +225,21 @@ async function getOrders(filters = {}) {
   return rows.map(enrichOrderRow).map(formatOrderAmounts);
 }
 
+async function getOrdersForCustomer(customer = {}, filters = {}) {
+  const rawStatus = filters.status;
+  const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : rawStatus;
+  const rows = await fetchOrdersForCustomer({
+    customerEmail: customer.email || null,
+    customerPhone: customer.phone || null,
+    status,
+  });
+  return rows.map(enrichOrderRow).map(formatOrderAmounts);
+}
+
 module.exports = {
   createOrder,
   getOrderById,
   getOrders,
+  getOrdersForCustomer,
   SUPPORTED_ORDER_STATUSES: Array.from(SUPPORTED_ORDER_STATUSES),
 };

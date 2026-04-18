@@ -135,7 +135,15 @@ async function getOrderById(orderId) {
   return rows[0];
 }
 
-async function listOrders({ restaurantId = null, status = null, completedDate = null, timezone = 'America/Los_Angeles', limit = 200 } = {}) {
+async function listOrders({
+  restaurantId = null,
+  customerEmail = null,
+  customerPhone = null,
+  status = null,
+  completedDate = null,
+  timezone = 'America/Los_Angeles',
+  limit = 200,
+} = {}) {
   const whereClauses = [];
   const params = [];
 
@@ -147,6 +155,14 @@ async function listOrders({ restaurantId = null, status = null, completedDate = 
   if (status) {
     params.push(status);
     whereClauses.push(`LOWER(o.status) = LOWER($${params.length})`);
+  }
+
+  if (customerEmail) {
+    params.push(customerEmail);
+    whereClauses.push(`LOWER(o.customer_email) = LOWER($${params.length})`);
+  } else if (customerPhone) {
+    params.push(customerPhone);
+    whereClauses.push(`o.customer_phone = $${params.length}`);
   }
 
   if (completedDate) {
@@ -209,6 +225,10 @@ async function listOrdersForRestaurant(restaurantId, { status = null, completedD
   return listOrders({ restaurantId, status, completedDate, timezone });
 }
 
+async function listOrdersForCustomer({ customerEmail = null, customerPhone = null, status = null, completedDate = null, timezone = 'America/Los_Angeles' } = {}) {
+  return listOrders({ customerEmail, customerPhone, status, completedDate, timezone });
+}
+
 async function updateOrderStatus(orderId, updates) {
   const setStatements = [];
   const params = [];
@@ -237,5 +257,6 @@ module.exports = {
   getOrderById,
   listOrders,
   listOrdersForRestaurant,
+  listOrdersForCustomer,
   updateOrderStatus,
 };
