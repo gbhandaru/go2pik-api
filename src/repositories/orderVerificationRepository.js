@@ -3,22 +3,24 @@ const pool = require('../config/db');
 function mapVerification(row) {
   if (!row) return null;
   return {
-    id: row.id,
+    id: row.verification_id ?? row.id,
     customerName: row.customer_name,
-    customerPhone: row.customer_phone,
+    phone: row.phone,
+    maskedPhone: row.masked_phone,
+    customerPhone: row.customer_phone || row.phone,
     customerEmail: row.customer_email,
     restaurantId: row.restaurant_id,
-    orderPayload: row.order_payload,
-    twilioVerificationSid: row.twilio_verification_sid,
+    pickupType: row.pickup_type,
+    pickupTime: row.pickup_time,
+    pendingOrderPayload: row.pending_order_payload,
+    otpHash: row.otp_hash,
+    otpLastSentAt: row.otp_last_sent_at,
     status: row.status,
     attemptCount: Number(row.attempt_count || 0),
-    resendCount: Number(row.resend_count || 0),
     maxAttempts: Number(row.max_attempts || 0),
     expiresAt: row.expires_at,
     resendAvailableAt: row.resend_available_at,
     verifiedAt: row.verified_at,
-    orderId: row.order_id,
-    orderNumber: row.order_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -28,40 +30,44 @@ async function createVerificationSession(fields) {
   const query = `
     INSERT INTO order_verifications (
       customer_name,
+      phone,
+      masked_phone,
       customer_phone,
       customer_email,
       restaurant_id,
-      order_payload,
-      twilio_verification_sid,
+      pickup_type,
+      pickup_time,
+      pending_order_payload,
+      otp_hash,
+      otp_last_sent_at,
       status,
       attempt_count,
-      resend_count,
       max_attempts,
       expires_at,
       resend_available_at,
-      verified_at,
-      order_id,
-      order_number
+      verified_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *;
   `;
   const values = [
     fields.customerName || 'Guest',
-    fields.customerPhone,
+    fields.phone,
+    fields.maskedPhone || null,
+    fields.customerPhone || fields.phone || null,
     fields.customerEmail || null,
     fields.restaurantId,
-    JSON.stringify(fields.orderPayload || {}),
-    fields.twilioVerificationSid || null,
+    fields.pickupType || null,
+    fields.pickupTime || null,
+    JSON.stringify(fields.pendingOrderPayload || {}),
+    fields.otpHash || null,
+    fields.otpLastSentAt || null,
     fields.status || 'pending',
     fields.attemptCount || 0,
-    fields.resendCount || 0,
     fields.maxAttempts || 0,
     fields.expiresAt,
     fields.resendAvailableAt,
     fields.verifiedAt || null,
-    fields.orderId || null,
-    fields.orderNumber || null,
   ];
   const { rows } = await pool.query(query, values);
   return mapVerification(rows[0]);
@@ -71,7 +77,7 @@ async function getVerificationSessionById(id) {
   const query = `
     SELECT *
     FROM order_verifications
-    WHERE id = $1
+    WHERE verification_id = $1
     LIMIT 1;
   `;
   const { rows } = await pool.query(query, [id]);
@@ -84,9 +90,9 @@ async function updateVerificationSession(id, fields = {}) {
   const normalized = {
     ...fields,
   };
-  if (normalized.orderPayload !== undefined) {
-    normalized.order_payload = JSON.stringify(normalized.orderPayload || {});
-    delete normalized.orderPayload;
+  if (normalized.pendingOrderPayload !== undefined) {
+    normalized.pending_order_payload = JSON.stringify(normalized.pendingOrderPayload || {});
+    delete normalized.pendingOrderPayload;
   }
   Object.entries(normalized).forEach(([key, value]) => {
     if (value !== undefined) {
@@ -101,7 +107,7 @@ async function updateVerificationSession(id, fields = {}) {
   const query = `
     UPDATE order_verifications
     SET ${updates.join(', ')}, updated_at = now()
-    WHERE id = $${values.length}
+    WHERE verification_id = $${values.length}
     RETURNING *;
   `;
   const { rows } = await pool.query(query, values);

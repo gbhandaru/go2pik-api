@@ -1,19 +1,19 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/errors');
 const config = require('../config/env');
-const { fetchVerifyServiceDetails } = require('../services/twilioVerifyService');
+const { fetchTwilioAccountDetails } = require('../services/twilioSmsService');
 
 const twilioVerifyHealth = asyncHandler(async (req, res) => {
-  const { accountSid, authToken, verifyServiceSid } = config.twilio || {};
-  if (!accountSid || !authToken || !verifyServiceSid) {
-    throw ApiError.badRequest('Twilio Verify configuration is incomplete');
+  const { accountSid, authToken, phoneNumber } = config.twilio || {};
+  if (!accountSid || !authToken || !phoneNumber) {
+    throw ApiError.badRequest('Twilio SMS configuration is incomplete');
   }
 
-  console.log('[healthController] twilio verify health check requested', {
-    verifyServiceSid: verifyServiceSid ? `${verifyServiceSid.slice(0, 4)}...` : null,
+  console.log('[healthController] twilio sms health check requested', {
+    accountSid: accountSid ? `${accountSid.slice(0, 4)}...` : null,
   });
 
-  const service = await fetchVerifyServiceDetails();
+  const service = await fetchTwilioAccountDetails();
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     Pragma: 'no-cache',
@@ -21,7 +21,7 @@ const twilioVerifyHealth = asyncHandler(async (req, res) => {
   });
   res.json({
     status: 'ok',
-    service: 'twilio-verify',
+    service: 'twilio-sms',
     configured: true,
     reachable: true,
     otpLength: Number(config.verification?.otpLength || 6),
