@@ -10,6 +10,16 @@ function formatLocation(row) {
   return row.address_line1 || '';
 }
 
+function formatAddress(row) {
+  const formatted = formatLocation(row);
+  return {
+    line1: row.address_line1 || '',
+    city: row.city || '',
+    state: row.state || '',
+    formatted,
+  };
+}
+
 function formatMenuItemFromRow(row) {
   return {
     id: row.menu_item_id,
@@ -33,6 +43,7 @@ function groupRestaurants(rows) {
         name: row.restaurant_name,
         cuisine: row.cuisine_type,
         location: formatLocation(row),
+        address: formatAddress(row),
         categories: [],
         uncategorized: [],
       });
@@ -132,7 +143,13 @@ function convertFallbackRestaurant(rest) {
     slug: rest.slug || rest.id,
     name: rest.name,
     cuisine: rest.cuisine_type || rest.cuisine,
-    location: rest.location || '',
+    location: rest.location || rest.address?.formatted || '',
+    address: rest.address || {
+      line1: rest.location || '',
+      city: '',
+      state: '',
+      formatted: rest.location || '',
+    },
     categories: [
       {
         id: 'menu',
