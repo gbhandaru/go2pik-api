@@ -90,7 +90,7 @@ async function startOrderVerification(payload = {}) {
     customerPhone,
     customerEmail: draft.customer?.email || null,
     restaurantId: draft.restaurantId,
-    pickupType: draft.customer?.pickupType || draft.customer?.pickup_type || null,
+    pickupType: draft.customer?.pickupType || draft.customer?.pickup_type || 'pickup',
     pickupTime: draft.customer?.pickupTime || draft.customer?.pickup_time || null,
     pendingOrderPayload: {
       ...draft,
