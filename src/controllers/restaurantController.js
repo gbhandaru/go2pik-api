@@ -15,6 +15,7 @@ const getRestaurantMenu = asyncHandler(async (req, res) => {
       name: restaurant.name,
       cuisine: restaurant.cuisine,
       location: restaurant.location,
+      address: restaurant.address,
     },
     categories: restaurant.categories,
     menu: restaurant.menu,
