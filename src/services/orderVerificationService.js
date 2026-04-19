@@ -91,6 +91,15 @@ async function startOrderVerification(payload = {}) {
   const otp = generateOtp(Number(config.verification.otpLength || 6));
   const otpHash = hashOtp(otp);
   const maskedPhone = maskPhoneNumber(customerPhone);
+  console.log('[orderVerificationService] start verification draft prepared', {
+    restaurantId: draft.restaurantId,
+    customerPhone: maskedPhone,
+    customerEmailPresent: Boolean(draft.customer?.email),
+    itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
+    pickupType: normalizePickupType(draft.customer?.pickupType || draft.customer?.pickup_type),
+    pickupTimePresent: Boolean(draft.customer?.pickupTime || draft.customer?.pickup_time),
+    otpLength: String(otp).length,
+  });
   const session = await createVerificationSession({
     customerName: draft.customer?.name || 'Guest',
     phone: customerPhone,
@@ -115,6 +124,15 @@ async function startOrderVerification(payload = {}) {
     expiresAt: getExpiryDate(),
     resendAvailableAt: getResendAvailableDate(),
   });
+  console.log('[orderVerificationService] verification session created', {
+    sessionId: session.id,
+    status: session.status,
+    phone: session.maskedPhone || maskedPhone,
+    pickupType: session.pickupType,
+    pickupTime: session.pickupTime,
+    expiresAt: session.expiresAt,
+    resendAvailableAt: session.resendAvailableAt,
+  });
 
   try {
     const message = await sendVerificationSms(customerPhone, otp);
@@ -122,11 +140,17 @@ async function startOrderVerification(payload = {}) {
       sessionId: session.id,
       messageSid: message.sid,
       status: message.status,
+      to: message.to,
       phone: maskedPhone,
     });
     const updated = await updateVerificationSession(session.id, {
       otp_hash: otpHash,
       otp_last_sent_at: new Date(),
+    });
+    console.log('[orderVerificationService] verification session updated after SMS send', {
+      sessionId: updated.id,
+      status: updated.status,
+      otpLastSentAt: updated.otpLastSentAt,
     });
     return {
       verification: toSessionResponse(updated),
