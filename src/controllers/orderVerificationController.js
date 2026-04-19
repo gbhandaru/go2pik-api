@@ -33,6 +33,7 @@ const start = asyncHandler(async (req, res) => {
     verificationId: result?.verification?.id || null,
     status: result?.verification?.status || null,
     customerPhoneMasked: result?.verification?.maskedPhone || null,
+    twilioVerificationSid: result?.verification?.twilioVerificationSid || null,
     expiresAt: result?.verification?.expiresAt || null,
     resendAvailableAt: result?.verification?.resendAvailableAt || null,
   });
@@ -40,6 +41,7 @@ const start = asyncHandler(async (req, res) => {
     success: true,
     message: 'OTP sent successfully',
     verification: result.verification,
+    twilioVerification: result.twilioVerification || null,
   });
 });
 
@@ -63,6 +65,7 @@ const resend = asyncHandler(async (req, res) => {
     success: true,
     message: 'OTP resent successfully',
     verification: result.verification,
+    twilioVerification: result.twilioVerification || null,
   });
 });
 
