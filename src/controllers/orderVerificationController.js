@@ -29,6 +29,13 @@ const start = asyncHandler(async (req, res) => {
     customerKeys: Object.keys(payload.customer || {}),
   });
   const result = await startOrderVerification(payload);
+  console.log('[orderVerificationController] verification start response ready', {
+    verificationId: result?.verification?.id || null,
+    status: result?.verification?.status || null,
+    customerPhoneMasked: result?.verification?.maskedPhone || null,
+    expiresAt: result?.verification?.expiresAt || null,
+    resendAvailableAt: result?.verification?.resendAvailableAt || null,
+  });
   res.status(201).json({
     success: true,
     message: 'OTP sent successfully',
