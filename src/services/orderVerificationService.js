@@ -117,7 +117,6 @@ async function startOrderVerification(payload = {}) {
         phone: customerPhone,
       },
     },
-    otpLastSentAt: new Date(),
     status: 'pending',
     attemptCount: 0,
     maxAttempts: Number(config.verification.otpMaxAttempts || 5),
@@ -148,12 +147,10 @@ async function startOrderVerification(payload = {}) {
     });
     const updated = await updateVerificationSession(session.id, {
       twilio_verification_sid: verification.sid,
-      otp_last_sent_at: new Date(),
     });
     console.log('[orderVerificationService] verification session updated after Twilio Verify send', {
       sessionId: updated.id,
       status: updated.status,
-      otpLastSentAt: updated.otpLastSentAt,
       twilioVerificationSid: verification.sid,
     });
     return {
@@ -223,7 +220,6 @@ async function resendOrderVerification(sessionId) {
     });
     const updated = await updateVerificationSession(session.id, {
       twilio_verification_sid: verification.sid,
-      otp_last_sent_at: new Date(),
       resend_available_at: getResendAvailableDate(),
       expires_at: getExpiryDate(),
     });
