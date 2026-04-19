@@ -1,10 +1,9 @@
 const ApiError = require('../utils/errors');
 const config = require('../config/env');
-const { fetchTwilioAccountDetails, sendSms } = require('./twilioSmsService');
+const { getTwilioClient } = require('./twilioSmsService');
 const { normalizePhoneNumber, maskPhoneNumber } = require('../utils/phone');
 const { createVerificationSession, getVerificationSessionById, updateVerificationSession } = require('../repositories/orderVerificationRepository');
 const { createOrder, prepareOrderDraft } = require('./orderService');
-const { generateOtp, hashOtp, verifyOtp } = require('../utils/otp');
 
 function normalizePickupType(value) {
   const normalized = String(value || '').trim().toUpperCase();
@@ -39,28 +38,25 @@ function toSessionResponse(session) {
     attemptCount: session.attemptCount,
     maxAttempts: session.maxAttempts,
     verifiedAt: session.verifiedAt,
+    twilioVerificationSid: session.twilioVerificationSid || null,
   };
 }
 
 function ensureVerificationConfig() {
-  const { accountSid, authToken, phoneNumber } = config.twilio || {};
-  if (!accountSid || !authToken || !phoneNumber) {
-    throw ApiError.badRequest('Twilio SMS configuration is incomplete');
+  const { accountSid, authToken, verifyServiceSid } = config.twilio || {};
+  if (!accountSid || !authToken || !verifyServiceSid) {
+    throw ApiError.badRequest('Twilio Verify configuration is incomplete');
   }
 }
 
-async function sendVerificationSms(phone, otp) {
-  const body = `Your Go2Pik verification code is ${otp}. It expires in ${Number(config.verification.otpExpiryMinutes || 10)} minutes.`;
-  console.log('[orderVerificationService] sending SMS verification', {
-    phone: maskPhoneNumber(phone),
-    otpLength: String(otp).length,
-  });
-  return sendSms({ to: phone, body });
+function getVerifyService() {
+  ensureVerificationConfig();
+  const client = getTwilioClient();
+  return client.verify.v2.services(config.twilio.verifyServiceSid);
 }
 
 async function testOrderVerificationService(payload = {}) {
-  ensureVerificationConfig();
-  const service = await fetchTwilioAccountDetails();
+  const service = await getVerifyService().fetch();
   const phone = normalizePhoneNumber(payload.phone || payload.customerPhone);
   if (!phone) {
     return {
@@ -68,14 +64,22 @@ async function testOrderVerificationService(payload = {}) {
       verification: null,
     };
   }
-  const otp = generateOtp(Number(config.verification.otpLength || 6));
-  const message = await sendVerificationSms(phone, otp);
+  const verification = await getVerifyService().verifications.create({
+    to: phone,
+    channel: 'sms',
+  });
+  console.log('[orderVerificationService] Twilio Verify test send status', {
+    serviceSid: service.sid || null,
+    verificationSid: verification.sid || null,
+    status: verification.status || null,
+    phone: maskPhoneNumber(phone),
+  });
   return {
     service,
     verification: {
-      sid: message.sid,
-      status: message.status,
-      to: message.to,
+      sid: verification.sid,
+      status: verification.status,
+      to: verification.to,
       channel: 'sms',
     },
   };
@@ -88,8 +92,6 @@ async function startOrderVerification(payload = {}) {
   if (!customerPhone) {
     throw ApiError.badRequest('customer.phone is required');
   }
-  const otp = generateOtp(Number(config.verification.otpLength || 6));
-  const otpHash = hashOtp(otp);
   const maskedPhone = maskPhoneNumber(customerPhone);
   console.log('[orderVerificationService] start verification draft prepared', {
     restaurantId: draft.restaurantId,
@@ -98,7 +100,6 @@ async function startOrderVerification(payload = {}) {
     itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
     pickupType: normalizePickupType(draft.customer?.pickupType || draft.customer?.pickup_type),
     pickupTimePresent: Boolean(draft.customer?.pickupTime || draft.customer?.pickup_time),
-    otpLength: String(otp).length,
   });
   const session = await createVerificationSession({
     customerName: draft.customer?.name || 'Guest',
@@ -116,7 +117,6 @@ async function startOrderVerification(payload = {}) {
         phone: customerPhone,
       },
     },
-    otpHash,
     otpLastSentAt: new Date(),
     status: 'pending',
     attemptCount: 0,
@@ -135,28 +135,41 @@ async function startOrderVerification(payload = {}) {
   });
 
   try {
-    const message = await sendVerificationSms(customerPhone, otp);
-    console.log('[orderVerificationService] verification SMS sent', {
+    const verification = await getVerifyService().verifications.create({
+      to: customerPhone,
+      channel: 'sms',
+    });
+    console.log('[orderVerificationService] Twilio Verify send status', {
       sessionId: session.id,
-      messageSid: message.sid,
-      status: message.status,
-      to: message.to,
+      verificationSid: verification.sid,
+      status: verification.status,
+      to: verification.to,
       phone: maskedPhone,
     });
     const updated = await updateVerificationSession(session.id, {
-      otp_hash: otpHash,
+      twilio_verification_sid: verification.sid,
       otp_last_sent_at: new Date(),
     });
-    console.log('[orderVerificationService] verification session updated after SMS send', {
+    console.log('[orderVerificationService] verification session updated after Twilio Verify send', {
       sessionId: updated.id,
       status: updated.status,
       otpLastSentAt: updated.otpLastSentAt,
+      twilioVerificationSid: verification.sid,
     });
     return {
-      verification: toSessionResponse(updated),
+      verification: {
+        ...toSessionResponse(updated),
+        twilioVerificationSid: verification.sid,
+      },
+      twilioVerification: {
+        sid: verification.sid,
+        status: verification.status,
+        to: verification.to,
+        channel: verification.channel,
+      },
     };
   } catch (error) {
-    console.error('[orderVerificationService] failed to send verification SMS', {
+    console.error('[orderVerificationService] failed to send Twilio Verify verification', {
       sessionId: session.id,
       phone: maskedPhone,
       code: error?.code,
@@ -198,26 +211,36 @@ async function resendOrderVerification(sessionId) {
   }
 
   try {
-    const otp = generateOtp(Number(config.verification.otpLength || 6));
-    const otpHash = hashOtp(otp);
-    const message = await sendVerificationSms(session.customerPhone, otp);
-    console.log('[orderVerificationService] verification SMS resent', {
+    const verification = await getVerifyService().verifications.create({
+      to: session.customerPhone,
+      channel: 'sms',
+    });
+    console.log('[orderVerificationService] Twilio Verify resend status', {
       sessionId: session.id,
-      messageSid: message.sid,
-      status: message.status,
+      verificationSid: verification.sid,
+      status: verification.status,
       phone: maskPhoneNumber(session.customerPhone),
     });
     const updated = await updateVerificationSession(session.id, {
-      otp_hash: otpHash,
+      twilio_verification_sid: verification.sid,
       otp_last_sent_at: new Date(),
       resend_available_at: getResendAvailableDate(),
       expires_at: getExpiryDate(),
     });
     return {
-      verification: toSessionResponse(updated),
+      verification: {
+        ...toSessionResponse(updated),
+        twilioVerificationSid: verification.sid,
+      },
+      twilioVerification: {
+        sid: verification.sid,
+        status: verification.status,
+        to: verification.to,
+        channel: verification.channel,
+      },
     };
   } catch (error) {
-    console.error('[orderVerificationService] failed to resend verification SMS', {
+    console.error('[orderVerificationService] failed to resend Twilio Verify verification', {
       sessionId: session.id,
       phone: maskPhoneNumber(session.customerPhone),
       code: error?.code,
@@ -257,29 +280,36 @@ async function confirmOrderVerification(sessionId, code) {
   if (!code || String(code).trim().length === 0) {
     throw ApiError.badRequest('code is required');
   }
-  if (config.verification.otpLength && String(code).trim().length !== Number(config.verification.otpLength)) {
-    throw ApiError.badRequest(`code must be ${config.verification.otpLength} digits`);
-  }
 
   await updateVerificationSession(session.id, { status: 'processing' });
-  const isValid = verifyOtp(String(code).trim(), session.otpHash);
-  if (!isValid) {
-    console.warn('[orderVerificationService] verification code rejected', {
-      sessionId: session.id,
-      phone: maskPhoneNumber(session.customerPhone),
-      attemptCount: session.attemptCount + 1,
-      maxAttempts: session.maxAttempts,
-    });
-    const nextAttempts = session.attemptCount + 1;
-    const isExhausted = nextAttempts >= session.maxAttempts;
-    await updateVerificationSession(session.id, {
-      status: isExhausted ? 'failed' : 'pending',
-      attempt_count: nextAttempts,
-    });
-    throw ApiError.badRequest('Invalid OTP code');
-  }
 
   try {
+    const check = await getVerifyService().verificationChecks.create({
+      to: session.customerPhone,
+      code: String(code).trim(),
+    });
+    console.log('[orderVerificationService] Twilio Verify check status', {
+      sessionId: session.id,
+      verificationSid: check.sid || null,
+      status: check.status || null,
+      phone: maskPhoneNumber(session.customerPhone),
+    });
+    if (check.status !== 'approved') {
+      const nextAttempts = session.attemptCount + 1;
+      const isExhausted = nextAttempts >= session.maxAttempts;
+      console.warn('[orderVerificationService] Twilio Verify code rejected', {
+        sessionId: session.id,
+        phone: maskPhoneNumber(session.customerPhone),
+        attemptCount: nextAttempts,
+        maxAttempts: session.maxAttempts,
+        twilioStatus: check.status || null,
+      });
+      await updateVerificationSession(session.id, {
+        status: isExhausted ? 'failed' : 'pending',
+        attempt_count: nextAttempts,
+      });
+      throw ApiError.badRequest('Invalid OTP code');
+    }
     console.log('[orderVerificationService] OTP approved, creating final order', {
       sessionId: session.id,
       phone: maskPhoneNumber(session.customerPhone),
@@ -298,6 +328,25 @@ async function confirmOrderVerification(sessionId, code) {
       notification: order.notification || null,
     };
   } catch (error) {
+    if (error?.status && error.status < 500) {
+      console.warn('[orderVerificationService] Twilio Verify check failed', {
+        sessionId: session.id,
+        phone: maskPhoneNumber(session.customerPhone),
+        code: error?.code,
+        status: error?.status,
+        message: error?.message,
+      });
+      const nextAttempts = session.attemptCount + 1;
+      const isExhausted = nextAttempts >= session.maxAttempts;
+      await updateVerificationSession(session.id, {
+        status: isExhausted ? 'failed' : 'pending',
+        attempt_count: nextAttempts,
+      });
+      throw ApiError.badRequest('Invalid OTP code');
+    }
+    if (error instanceof ApiError) {
+      throw error;
+    }
     await updateVerificationSession(session.id, { status: 'failed' });
     throw error;
   }
