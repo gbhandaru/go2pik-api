@@ -31,7 +31,15 @@ function maskPhoneNumber(phone) {
   return `***${digits.slice(-4)}`;
 }
 
+function isE164PhoneNumber(phone) {
+  if (!phone) {
+    return false;
+  }
+  return /^\+[1-9]\d{1,14}$/.test(String(phone).trim());
+}
+
 module.exports = {
   normalizePhoneNumber,
   maskPhoneNumber,
+  isE164PhoneNumber,
 };

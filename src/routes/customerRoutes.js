@@ -9,8 +9,10 @@ const {
   deactivateCustomer,
   sendWelcomeEmail,
 } = require('../controllers/customerController');
+const { updatePhone } = require('../controllers/customerAuthController');
 
 router.post('/', createCustomer);
+router.patch('/me/phone', updatePhone);
 router.get('/:id/orders', getCustomerOrders);
 router.get('/:id', getCustomer);
 router.put('/:id', updateCustomer);

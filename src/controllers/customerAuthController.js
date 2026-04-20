@@ -6,9 +6,11 @@ const {
   logoutCustomer,
   refreshCustomerSession,
   updateCustomerProfileByEmail,
+  updateCustomerPhone,
 } = require('../services/customerAuthService');
 const { findCustomerById } = require('../services/customerService');
 const { verifyAccessToken } = require('../utils/token');
+const { normalizePhoneNumber, isE164PhoneNumber } = require('../utils/phone');
 
 function extractBearerToken(req) {
   const header = req.headers.authorization || '';
@@ -16,6 +18,24 @@ function extractBearerToken(req) {
     return header.slice(7).trim();
   }
   return null;
+}
+
+async function getAuthenticatedCustomer(req) {
+  const token = extractBearerToken(req);
+  if (!token) {
+    throw ApiError.unauthorized('Authorization token missing');
+  }
+  let payload;
+  try {
+    payload = verifyAccessToken(token, 'customer');
+  } catch (error) {
+    throw ApiError.unauthorized('Invalid or expired token');
+  }
+  const customer = await findCustomerById(Number(payload.sub));
+  if (!customer) {
+    throw ApiError.notFound('Customer not found');
+  }
+  return customer;
 }
 
 const register = asyncHandler(async (req, res) => {
@@ -56,20 +76,7 @@ const refresh = asyncHandler(async (req, res) => {
 });
 
 const profile = asyncHandler(async (req, res) => {
-  const token = extractBearerToken(req);
-  if (!token) {
-    throw ApiError.unauthorized('Authorization token missing');
-  }
-  let payload;
-  try {
-    payload = verifyAccessToken(token, 'customer');
-  } catch (error) {
-    throw ApiError.unauthorized('Invalid or expired token');
-  }
-  const customer = await findCustomerById(Number(payload.sub));
-  if (!customer) {
-    throw ApiError.notFound('Customer not found');
-  }
+  const customer = await getAuthenticatedCustomer(req);
   res.json({ customer });
 });
 
@@ -81,6 +88,19 @@ const updateProfile = asyncHandler(async (req, res) => {
   });
 });
 
+const updatePhone = asyncHandler(async (req, res) => {
+  const customer = await getAuthenticatedCustomer(req);
+  const phone = normalizePhoneNumber(req.body?.phone);
+  if (!isE164PhoneNumber(phone)) {
+    throw ApiError.badRequest('phone must be in E.164 format');
+  }
+  const result = await updateCustomerPhone(customer.id, phone);
+  res.json({
+    message: 'Customer phone updated',
+    customer: result.customer,
+  });
+});
+
 module.exports = {
   register,
   login,
@@ -88,4 +108,5 @@ module.exports = {
   refresh,
   profile,
   updateProfile,
+  updatePhone,
 };
