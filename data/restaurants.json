@@ -5,6 +5,19 @@
       "name": "Biryani Junction",
       "cuisine": "South Indian",
       "location": "Fremont",
+      "pickupHours": {
+        "timezone": "America/Los_Angeles",
+        "asapAllowed": true,
+        "weeklySchedule": {
+          "monday": [{ "open": "10:00", "close": "21:00" }],
+          "tuesday": [{ "open": "10:00", "close": "21:00" }],
+          "wednesday": [{ "open": "10:00", "close": "21:00" }],
+          "thursday": [{ "open": "10:00", "close": "21:00" }],
+          "friday": [{ "open": "10:00", "close": "22:00" }],
+          "saturday": [{ "open": "10:00", "close": "22:00" }],
+          "sunday": [{ "open": "11:00", "close": "20:00" }]
+        }
+      },
       "menu": [
         {
           "sku": "masala-dosa",
@@ -31,6 +44,19 @@
       "name": "Kabab Express",
       "cuisine": "Indian Street Food",
       "location": "Brentwood",
+      "pickupHours": {
+        "timezone": "America/Los_Angeles",
+        "asapAllowed": true,
+        "weeklySchedule": {
+          "monday": [{ "open": "10:30", "close": "21:30" }],
+          "tuesday": [{ "open": "10:30", "close": "21:30" }],
+          "wednesday": [{ "open": "10:30", "close": "21:30" }],
+          "thursday": [{ "open": "10:30", "close": "21:30" }],
+          "friday": [{ "open": "10:30", "close": "22:30" }],
+          "saturday": [{ "open": "10:30", "close": "22:30" }],
+          "sunday": [{ "open": "11:30", "close": "20:30" }]
+        }
+      },
       "menu": [
         {
           "sku": "chicken-tikka-kebab",
@@ -57,6 +83,19 @@
       "name": "Bheemavaram Ruchulu",
       "cuisine": "Modern South Indian",
       "location": "Fremont",
+      "pickupHours": {
+        "timezone": "America/Los_Angeles",
+        "asapAllowed": true,
+        "weeklySchedule": {
+          "monday": [{ "open": "11:00", "close": "21:00" }],
+          "tuesday": [{ "open": "11:00", "close": "21:00" }],
+          "wednesday": [{ "open": "11:00", "close": "21:00" }],
+          "thursday": [{ "open": "11:00", "close": "21:00" }],
+          "friday": [{ "open": "11:00", "close": "22:00" }],
+          "saturday": [{ "open": "11:00", "close": "22:00" }],
+          "sunday": [{ "open": "11:30", "close": "20:00" }]
+        }
+      },
       "menu": [
         {
           "sku": "smoked-butter-chicken",

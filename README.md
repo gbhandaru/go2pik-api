@@ -96,8 +96,24 @@ The bulk import endpoint accepts either JSON or CSV.
   - `item_price`
   - `item_is_available`
   - `item_is_vegetarian`
-  - `item_is_vegan`
-  - `item_display_order`
+- `item_is_vegan`
+- `item_display_order`
+
+Restaurant/menu payloads now include `pickupAvailability` and `openHours` so clients can determine:
+
+- whether the restaurant is currently open
+- today's opening and closing times
+- whether ASAP pickup is allowed
+- the weekly pickup windows for scheduled orders
+
+Scheduled pickup requests are validated server-side. When a pickup time falls outside open hours, the API returns a 400 response with:
+
+- `code: pickup_time_out_of_hours`
+- `message: Pickup time is outside restaurant open hours. Please choose another time.`
+
+If the restaurant is closed, the menu payload still includes a user-safe status message:
+
+- `Currently the restaurant is closed, but you can still place an order for later pickup.`
 
 Example CSV:
 

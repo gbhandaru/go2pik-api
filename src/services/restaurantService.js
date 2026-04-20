@@ -1,4 +1,5 @@
 const ApiError = require('../utils/errors');
+const { buildPickupAvailability, normalizePickupHours } = require('../utils/pickupHours');
 const {
   fetchRestaurantsFromDb,
   getFallbackRestaurants,
@@ -14,12 +15,28 @@ function decorateMenuItem(item) {
 }
 
 function decorateRestaurant(restaurant) {
+  const fallbackRestaurant = getFallbackRestaurantById(restaurant.id);
+  const pickupHoursSource =
+    restaurant.pickupHours ||
+    restaurant.openHours ||
+    restaurant.hours ||
+    fallbackRestaurant?.pickupHours ||
+    fallbackRestaurant?.openHours ||
+    fallbackRestaurant?.hours ||
+    {};
+  const pickupHours = normalizePickupHours(pickupHoursSource);
+  const pickupAvailability = buildPickupAvailability(pickupHours);
   const categories = (restaurant.categories || []).map((category) => ({
     ...category,
     items: (category.items || []).map(decorateMenuItem),
   }));
   return {
     ...restaurant,
+    openHours: pickupHours,
+    pickupHours,
+    pickupAvailability,
+    isOpenNow: pickupAvailability.isOpenNow,
+    asapAllowed: pickupAvailability.asapAllowed,
     categories,
     menu: (restaurant.menu || []).map(decorateMenuItem),
   };
