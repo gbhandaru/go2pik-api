@@ -67,6 +67,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 ## API Surface
 
 - `POST /api/auth/customers/signup|login|logout|refresh`, `GET /api/auth/customers/me` – customer auth
+- `PATCH /api/customers/me/phone` – authenticated customer phone update
 - `POST /api/auth/restaurant-users/login|logout|refresh`, `GET /api/auth/restaurant-users/me` – restaurant staff auth
 - `POST /api/customers`, `GET/PUT /api/customers/:id`, `GET /api/customers/:id/orders`, `PATCH /api/customers/:id/deactivate`
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
@@ -170,6 +171,34 @@ The completed-day filter uses the dashboard timezone, defaulting to `America/Los
 4. `POST /api/orders/verification/test`
    - Body: optional `{ phone }`
    - Response: `{ success, message, service, verification }`
+
+### Customer Phone Update
+
+- `PATCH /api/customers/me/phone`
+  - Headers:
+    - `Authorization: Bearer <customer_access_token>`
+    - `Content-Type: application/json`
+  - Body:
+    ```json
+    {
+      "phone": "+15103787548"
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "message": "Customer phone updated",
+      "customer": {
+        "id": 1,
+        "full_name": "Aarav Patel",
+        "phone": "+15103787548",
+        "email": "aarav@example.com",
+        "is_active": true,
+        "created_at": "2026-04-19T18:00:00.000Z",
+        "updated_at": "2026-04-19T18:10:00.000Z"
+      }
+    }
+    ```
 
 ### Health Check
 

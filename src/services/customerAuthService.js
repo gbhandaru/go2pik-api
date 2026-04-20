@@ -143,10 +143,22 @@ async function updateCustomerProfileByEmail(payload = {}) {
   return { customer };
 }
 
+async function updateCustomerPhone(customerId, phone) {
+  if (!customerId) {
+    throw ApiError.badRequest('customerId is required');
+  }
+  if (!phone) {
+    throw ApiError.badRequest('phone is required');
+  }
+  const customer = await updateCustomer(customerId, { phone });
+  return { customer };
+}
+
 module.exports = {
   signupCustomer,
   loginCustomer,
   logoutCustomer,
   refreshCustomerSession,
   updateCustomerProfileByEmail,
+  updateCustomerPhone,
 };
