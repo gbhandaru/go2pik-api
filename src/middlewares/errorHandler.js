@@ -24,7 +24,11 @@ function errorHandler(err, req, res, next) {
   if (status >= 500) {
     console.error('[error]', err);
   }
-  res.status(status).json({ message: error.message || 'Internal server error', details: error.details });
+  res.status(status).json({
+    message: error.message || 'Internal server error',
+    code: error.code || null,
+    details: error.details,
+  });
 }
 
 module.exports = errorHandler;

@@ -5,6 +5,7 @@ const { formatUsd } = require('../utils/currency');
 const { getRestaurantById } = require('./restaurantService');
 const { findCustomerById } = require('./customerService');
 const { sendOrderConfirmationEmail } = require('./notificationService');
+const { validateScheduledPickupTime } = require('../utils/pickupHours');
 const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
@@ -153,6 +154,28 @@ async function prepareOrderDraft(payload = {}) {
   }
   const restaurant = await getRestaurantById(restaurantId);
   const normalizedItems = normalizeMenuItems(items, restaurant);
+  const pickupTime = customer.pickupTime || customer.pickup_time || null;
+  const pickupTypeHint = String(customer.pickupType || customer.pickup_type || '').trim().toUpperCase();
+  const pickupType = pickupTypeHint === 'SCHEDULED' || pickupTime ? 'SCHEDULED' : 'ASAP';
+  if (pickupType === 'SCHEDULED' && !pickupTime) {
+    throw ApiError.validation('pickup_time_required', 'pickupTime is required for scheduled pickup');
+  }
+  if (pickupType === 'SCHEDULED' && pickupTime) {
+    try {
+      validateScheduledPickupTime(pickupTime, restaurant.pickupHours || restaurant.openHours || restaurant.hours || {});
+    } catch (error) {
+      if (error?.code === 'pickup_time_out_of_hours') {
+        throw ApiError.validation(
+          'pickup_time_out_of_hours',
+          'Pickup time is outside restaurant open hours. Please choose another time.'
+        );
+      }
+      if (error?.code === 'invalid_pickup_time') {
+        throw ApiError.validation('invalid_pickup_time', 'pickupTime must be a valid ISO date-time');
+      }
+      throw error;
+    }
+  }
   const subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const tax = Number((subtotal * DEFAULT_TAX_RATE).toFixed(2));
   const total = Number((subtotal + tax).toFixed(2));
@@ -162,6 +185,8 @@ async function prepareOrderDraft(payload = {}) {
   const normalizedCustomer = {
     ...customer,
     email: derivedEmail,
+    pickupType,
+    pickupTime,
   };
   if (!customer.email) {
     if (derivedEmail) {
@@ -203,6 +228,8 @@ async function prepareOrderDraft(payload = {}) {
     customerId: candidateCustomerId,
     items: normalizedItems,
     totals: { subtotal, tax, total },
+    pickupType,
+    pickupTime,
   };
 }
 

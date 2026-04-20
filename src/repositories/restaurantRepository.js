@@ -159,6 +159,7 @@ function convertFallbackRestaurant(rest) {
       },
     ],
     menu: items,
+    pickupHours: rest.pickupHours || rest.openHours || rest.hours || null,
   };
 }
 

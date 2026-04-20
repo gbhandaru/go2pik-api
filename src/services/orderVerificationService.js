@@ -98,8 +98,8 @@ async function startOrderVerification(payload = {}) {
     customerPhone: maskedPhone,
     customerEmailPresent: Boolean(draft.customer?.email),
     itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
-    pickupType: normalizePickupType(draft.customer?.pickupType || draft.customer?.pickup_type),
-    pickupTimePresent: Boolean(draft.customer?.pickupTime || draft.customer?.pickup_time),
+    pickupType: draft.pickupType,
+    pickupTimePresent: Boolean(draft.pickupTime),
   });
   const session = await createVerificationSession({
     customerName: draft.customer?.name || 'Guest',
@@ -108,8 +108,8 @@ async function startOrderVerification(payload = {}) {
     customerPhone,
     customerEmail: draft.customer?.email || null,
     restaurantId: draft.restaurantId,
-    pickupType: normalizePickupType(draft.customer?.pickupType || draft.customer?.pickup_type),
-    pickupTime: draft.customer?.pickupTime || draft.customer?.pickup_time || null,
+    pickupType: draft.pickupType,
+    pickupTime: draft.pickupTime || null,
     pendingOrderPayload: {
       ...draft,
       customer: {
@@ -309,9 +309,9 @@ async function confirmOrderVerification(sessionId, code) {
     console.log('[orderVerificationService] OTP approved, creating final order', {
       sessionId: session.id,
       phone: maskPhoneNumber(session.customerPhone),
-      restaurantId: session.restaurantId,
-    });
-    const order = await createOrder(session.pendingOrderPayload || {});
+    restaurantId: session.restaurantId,
+  });
+  const order = await createOrder(session.pendingOrderPayload || {});
     const completed = await updateVerificationSession(session.id, {
       status: 'consumed',
       verified_at: new Date(),

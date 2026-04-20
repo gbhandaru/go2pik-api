@@ -16,7 +16,12 @@ const getRestaurantMenu = asyncHandler(async (req, res) => {
       cuisine: restaurant.cuisine,
       location: restaurant.location,
       address: restaurant.address,
+      openHours: restaurant.openHours,
+      pickupAvailability: restaurant.pickupAvailability,
+      isOpenNow: restaurant.isOpenNow,
+      asapAllowed: restaurant.asapAllowed,
     },
+    pickupAvailability: restaurant.pickupAvailability,
     categories: restaurant.categories,
     menu: restaurant.menu,
   });
