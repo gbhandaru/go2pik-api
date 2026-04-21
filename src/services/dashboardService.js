@@ -2,6 +2,7 @@ const ApiError = require('../utils/errors');
 const { formatUsd } = require('../utils/currency');
 const {
   listOrdersForRestaurant,
+  listOrdersForRestaurantReport,
   updateOrderStatus,
 } = require('../repositories/orderRepository');
 
@@ -74,6 +75,111 @@ function decorateOrder(order) {
   };
 }
 
+function parseIsoDate(value, fieldName) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!ISO_DATE_RE.test(trimmed)) {
+    throw ApiError.badRequest(`${fieldName} must be in YYYY-MM-DD format`);
+  }
+  return trimmed;
+}
+
+function getReportRange(filters = {}) {
+  const today = getDateStringInTimezone(new Date(), DASHBOARD_TIMEZONE);
+  const todayFlag = String(filters.today || '').toLowerCase() === 'true' || filters.today === true;
+  const date = parseIsoDate(filters.date, 'date');
+  const from = parseIsoDate(filters.from || filters.startDate, 'from');
+  const to = parseIsoDate(filters.to || filters.endDate, 'to');
+
+  if (date && (from || to)) {
+    throw ApiError.badRequest('date cannot be combined with from/to');
+  }
+
+  if (todayFlag) {
+    return { from: today, to: today };
+  }
+
+  if (date) {
+    return { from: date, to: date };
+  }
+
+  if (!from && !to) {
+    return { from: today, to: today };
+  }
+
+  return {
+    from: from || to,
+    to: to || from,
+  };
+}
+
+function buildReportSummary(rows, range) {
+  const statusCounts = {
+    new: 0,
+    accepted: 0,
+    preparing: 0,
+    ready_for_pickup: 0,
+    completed: 0,
+    rejected: 0,
+  };
+  const itemMap = new Map();
+  let totalOrders = 0;
+  let totalAmount = 0;
+  let totalSubtotal = 0;
+
+  rows.forEach((row) => {
+    totalOrders += 1;
+    totalAmount += Number(row.total_amount || 0);
+    totalSubtotal += Number(row.subtotal || 0);
+    const normalizedStatus = String(row.status || '').toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(statusCounts, normalizedStatus)) {
+      statusCounts[normalizedStatus] += 1;
+    }
+
+    const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
+    rawItems.forEach((item) => {
+      const key = `${item.menuItemId ?? item.menu_item_id ?? item.name}`;
+      const existing = itemMap.get(key) || {
+        key,
+        menuItemId: item.menuItemId ?? item.menu_item_id ?? null,
+        name: item.name,
+        quantity: 0,
+        totalAmount: 0,
+        unitPrice: Number(item.price || 0),
+      };
+      const quantity = Number(item.quantity || 0);
+      const lineTotal = Number(item.lineTotal || item.line_total || 0);
+      existing.quantity += quantity;
+      existing.totalAmount += lineTotal;
+      itemMap.set(key, existing);
+    });
+  });
+
+  const items = Array.from(itemMap.values())
+    .map((item) => ({
+      ...item,
+      totalAmount: Number(item.totalAmount.toFixed(2)),
+      totalAmountDisplay: formatUsd(item.totalAmount),
+    }))
+    .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name));
+
+  return {
+    range,
+    timezone: DASHBOARD_TIMEZONE,
+    totals: {
+      orders: totalOrders,
+      subtotal: Number(totalSubtotal.toFixed(2)),
+      subtotalDisplay: formatUsd(totalSubtotal),
+      amount: Number(totalAmount.toFixed(2)),
+      amountDisplay: formatUsd(totalAmount),
+    },
+    statusCounts,
+    items,
+  };
+}
+
 async function getOrdersForRestaurant(restaurantId, filters = {}) {
   const rawStatus = filters.status;
   const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : rawStatus;
@@ -115,6 +221,16 @@ async function getOrdersForRestaurant(restaurantId, filters = {}) {
   return rows.map(mapOrder).map(decorateOrder);
 }
 
+async function getOrdersReportForRestaurant(restaurantId, filters = {}) {
+  const range = getReportRange(filters);
+  const rows = await listOrdersForRestaurantReport(restaurantId, {
+    createdFrom: range.from,
+    createdTo: range.to,
+    timezone: DASHBOARD_TIMEZONE,
+  });
+  return buildReportSummary(rows, range);
+}
+
 function buildStatusUpdate(nextStatus, options = {}) {
   if (!STATUS_TRANSITIONS.has(nextStatus)) {
     throw ApiError.badRequest(`Unsupported status: ${nextStatus}`);
@@ -147,6 +263,7 @@ async function updateStatus(orderId, nextStatus, options = {}) {
 
 module.exports = {
   getOrdersForRestaurant,
+  getOrdersReportForRestaurant,
   updateStatus,
   SUPPORTED_ORDER_STATUSES: Array.from(SUPPORTED_ORDER_STATUSES),
 };

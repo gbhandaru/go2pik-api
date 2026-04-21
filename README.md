@@ -76,6 +76,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/orders/verification/start`, `POST /api/orders/verification/confirm`, `POST /api/orders/verification/resend`, `POST /api/orders/verification/test`
 - `GET /api/health/twilio-verify`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
+- `GET /api/dashboard/restaurants/:restaurantId/reports/orders?today=true` or `?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - Menu maintenance via `GET/POST /api/dashboard/restaurants/:restaurantId/menu` and `PUT/PATCH /api/dashboard/menu-items/:menuItemId`
 - Menu category management via `GET/POST /api/dashboard/restaurants/:restaurantId/menu/categories` and `PUT /api/dashboard/restaurants/:restaurantId/menu/categories/:categoryId`
 - Bulk menu sync via `GET /api/dashboard/restaurants/:restaurantId/menu/export` and `POST /api/dashboard/restaurants/:restaurantId/menu/import`
@@ -160,6 +161,29 @@ For the Completed tab, fetch only orders completed on a specific calendar day:
   - `GET /api/dashboard/restaurants/12/orders?status=completedToday`
 
 The completed-day filter uses the dashboard timezone, defaulting to `America/Los_Angeles` unless `DASHBOARD_TIMEZONE` is set.
+
+### Restaurant Orders Report
+
+Use `GET /api/dashboard/restaurants/:restaurantId/reports/orders` for an owner summary report.
+
+Supported query params:
+
+- `today=true` to pull today’s report in the dashboard timezone
+- `date=YYYY-MM-DD` to pull a single day
+- `from=YYYY-MM-DD&to=YYYY-MM-DD` to pull a date range
+
+The response includes:
+
+- total number of orders
+- total amount
+- status counts
+- aggregated item summary
+
+Example:
+
+```bash
+GET /api/dashboard/restaurants/12/reports/orders?from=2026-04-01&to=2026-04-20
+```
 
 ## Notes
 

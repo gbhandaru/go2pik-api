@@ -141,6 +141,8 @@ async function listOrders({
   customerPhone = null,
   status = null,
   completedDate = null,
+  createdFrom = null,
+  createdTo = null,
   timezone = 'America/Los_Angeles',
   limit = 200,
 } = {}) {
@@ -171,7 +173,21 @@ async function listOrders({
     whereClauses.push(`DATE(o.completed_at AT TIME ZONE $${params.length - 1}) = $${params.length}::date`);
   }
 
-  params.push(limit);
+  if (createdFrom) {
+    params.push(timezone);
+    params.push(createdFrom);
+    whereClauses.push(`DATE(o.created_at AT TIME ZONE $${params.length - 1}) >= $${params.length}::date`);
+  }
+
+  if (createdTo) {
+    params.push(timezone);
+    params.push(createdTo);
+    whereClauses.push(`DATE(o.created_at AT TIME ZONE $${params.length - 1}) <= $${params.length}::date`);
+  }
+
+  if (limit !== null && limit !== undefined) {
+    params.push(limit);
+  }
 
   const query = `
     SELECT
@@ -215,7 +231,7 @@ async function listOrders({
     ${whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''}
     GROUP BY o.id, r.id
     ORDER BY o.created_at DESC
-    LIMIT $${params.length};
+    ${limit !== null && limit !== undefined ? `LIMIT $${params.length};` : ';'}
   `;
   const { rows } = await pool.query(query, params);
   return rows;
@@ -223,6 +239,13 @@ async function listOrders({
 
 async function listOrdersForRestaurant(restaurantId, { status = null, completedDate = null, timezone = 'America/Los_Angeles' } = {}) {
   return listOrders({ restaurantId, status, completedDate, timezone });
+}
+
+async function listOrdersForRestaurantReport(
+  restaurantId,
+  { createdFrom = null, createdTo = null, timezone = 'America/Los_Angeles' } = {}
+) {
+  return listOrders({ restaurantId, createdFrom, createdTo, timezone, limit: null });
 }
 
 async function listOrdersForCustomer({ customerEmail = null, customerPhone = null, status = null, completedDate = null, timezone = 'America/Los_Angeles' } = {}) {
@@ -257,6 +280,7 @@ module.exports = {
   getOrderById,
   listOrders,
   listOrdersForRestaurant,
+  listOrdersForRestaurantReport,
   listOrdersForCustomer,
   updateOrderStatus,
 };

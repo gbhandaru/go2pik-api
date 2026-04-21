@@ -1,6 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/errors');
-const { getOrdersForRestaurant, updateStatus } = require('../services/dashboardService');
+const { getOrdersForRestaurant, getOrdersReportForRestaurant, updateStatus } = require('../services/dashboardService');
 
 const listOrders = asyncHandler(async (req, res) => {
   const { status = null, completedDate = null, restaurantId: restaurantIdQuery = null } = req.query || {};
@@ -13,6 +13,15 @@ const listOrders = asyncHandler(async (req, res) => {
     completedDate: completedDate || null,
   });
   res.json({ success: true, orders });
+});
+
+const ordersReport = asyncHandler(async (req, res) => {
+  const restaurantId = req.params.restaurantId || null;
+  if (!restaurantId) {
+    throw ApiError.badRequest('restaurantId is required');
+  }
+  const report = await getOrdersReportForRestaurant(restaurantId, req.query || {});
+  res.json({ success: true, report });
 });
 
 const acceptOrder = asyncHandler(async (req, res) => {
@@ -46,6 +55,7 @@ const rejectOrder = asyncHandler(async (req, res) => {
 
 module.exports = {
   listOrders,
+  ordersReport,
   acceptOrder,
   markPreparing,
   markReady,
