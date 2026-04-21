@@ -1,6 +1,11 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/errors');
-const { getOrdersForRestaurant, getOrdersReportForRestaurant, updateStatus } = require('../services/dashboardService');
+const {
+  getOrdersForRestaurant,
+  getOrdersReportForRestaurant,
+  partiallyAcceptOrderForRestaurant,
+  updateStatus,
+} = require('../services/dashboardService');
 
 const listOrders = asyncHandler(async (req, res) => {
   const { status = null, completedDate = null, restaurantId: restaurantIdQuery = null } = req.query || {};
@@ -22,6 +27,15 @@ const ordersReport = asyncHandler(async (req, res) => {
   }
   const report = await getOrdersReportForRestaurant(restaurantId, req.query || {});
   res.json({ success: true, report });
+});
+
+const partialAcceptOrder = asyncHandler(async (req, res) => {
+  const order = await partiallyAcceptOrderForRestaurant(req.params.orderId, req.body || {});
+  res.json({
+    success: true,
+    message: 'Order partially accepted successfully',
+    order,
+  });
 });
 
 const acceptOrder = asyncHandler(async (req, res) => {
@@ -56,6 +70,7 @@ const rejectOrder = asyncHandler(async (req, res) => {
 module.exports = {
   listOrders,
   ordersReport,
+  partialAcceptOrder,
   acceptOrder,
   markPreparing,
   markReady,
