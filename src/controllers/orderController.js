@@ -1,6 +1,14 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/errors');
-const { getOrderById, getOrders } = require('../services/orderService');
+const {
+  getOrderById,
+  getOrderByNumber,
+  getOrders,
+  acceptUpdatedOrder,
+  cancelUpdatedOrder,
+} = require('../services/orderService');
+const { resolveAuthenticatedCustomer } = require('../utils/authenticatedCustomer');
+const { verifyOrderReviewToken } = require('../utils/token');
 
 const createOrderController = asyncHandler(async (req, res) => {
   throw ApiError.forbidden('Direct order creation is disabled. Use /api/orders/verification/start and /confirm.');
@@ -20,8 +28,111 @@ const getOrderController = asyncHandler(async (req, res) => {
   res.json({ success: true, order });
 });
 
+async function getRequiredAuthenticatedCustomer(req) {
+  const customer = await resolveAuthenticatedCustomer(req);
+  if (!customer) {
+    throw ApiError.unauthorized('Authorization token missing or invalid');
+  }
+  return customer;
+}
+
+function getReviewToken(req) {
+  return req.query?.token || req.body?.token || req.headers['x-order-review-token'] || null;
+}
+
+async function resolveOrderReviewContext(req, orderNumber) {
+  const token = getReviewToken(req);
+  if (!token) {
+    throw ApiError.unauthorized('Order review token is required');
+  }
+  let payload;
+  try {
+    payload = verifyOrderReviewToken(token);
+  } catch (error) {
+    throw ApiError.unauthorized('Order review token is invalid or expired');
+  }
+  if (String(payload.orderNumber || '') !== String(orderNumber || '')) {
+    throw ApiError.forbidden('Order review token does not match this order');
+  }
+  const order = await getOrderByNumber(orderNumber);
+  if (String(payload.sub || '') !== String(order.id)) {
+    throw ApiError.forbidden('Order review token does not match this order');
+  }
+  return {
+    order,
+    customer: {
+      email: payload.email || order.customer?.email || null,
+      phone: payload.phone || order.customer?.phone || null,
+    },
+    tokenPayload: payload,
+  };
+}
+
+const acceptUpdatedOrderController = asyncHandler(async (req, res) => {
+  const customer = await getRequiredAuthenticatedCustomer(req);
+  const result = await acceptUpdatedOrder(req.params.id, customer);
+  res.json({
+    success: true,
+    message: 'Updated order accepted successfully',
+    order: result.order,
+  });
+});
+
+const cancelUpdatedOrderController = asyncHandler(async (req, res) => {
+  const customer = await getRequiredAuthenticatedCustomer(req);
+  const note = req.body?.note || req.body?.reason || null;
+  const result = await cancelUpdatedOrder(req.params.id, customer, note);
+  res.json({
+    success: true,
+    message: 'Order cancelled successfully',
+    order: result.order,
+  });
+});
+
+const getOrderReviewController = asyncHandler(async (req, res) => {
+  const { order, tokenPayload } = await resolveOrderReviewContext(req, req.params.orderNumber);
+  res.json({
+    success: true,
+    order,
+    review: {
+      orderNumber: order.orderNumber,
+      tokenType: tokenPayload.type,
+      canAccept: String(order.acceptanceMode || '').toLowerCase() === 'partial'
+        && String(order.customerAction || '').toLowerCase() === 'pending',
+      canCancel: String(order.acceptanceMode || '').toLowerCase() === 'partial'
+        && String(order.customerAction || '').toLowerCase() === 'pending',
+    },
+  });
+});
+
+const acceptUpdatedOrderReviewController = asyncHandler(async (req, res) => {
+  const { order, customer } = await resolveOrderReviewContext(req, req.params.orderNumber);
+  const result = await acceptUpdatedOrder(order.id, customer);
+  res.json({
+    success: true,
+    message: 'Updated order accepted successfully',
+    order: result.order,
+  });
+});
+
+const cancelUpdatedOrderReviewController = asyncHandler(async (req, res) => {
+  const { order, customer } = await resolveOrderReviewContext(req, req.params.orderNumber);
+  const note = req.body?.note || req.body?.reason || null;
+  const result = await cancelUpdatedOrder(order.id, customer, note);
+  res.json({
+    success: true,
+    message: 'Order cancelled successfully',
+    order: result.order,
+  });
+});
+
 module.exports = {
   createOrder: createOrderController,
   listOrders: listOrdersController,
   getOrder: getOrderController,
+  acceptUpdatedOrder: acceptUpdatedOrderController,
+  cancelUpdatedOrder: cancelUpdatedOrderController,
+  getOrderReview: getOrderReviewController,
+  acceptUpdatedOrderReview: acceptUpdatedOrderReviewController,
+  cancelUpdatedOrderReview: cancelUpdatedOrderReviewController,
 };

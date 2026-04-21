@@ -8,6 +8,9 @@ const {
   customerRefreshTtl,
   restaurantRefreshTtl,
 } = config.auth;
+const {
+  orderReviewTokenTtlSeconds,
+} = config.publicLinks || {};
 
 function base64UrlEncode(buffer) {
   return Buffer.from(buffer)
@@ -92,6 +95,28 @@ function verifyAccessToken(token, expectedType) {
   return payload;
 }
 
+function issueOrderReviewToken(order, ttl = orderReviewTokenTtlSeconds) {
+  return signJwt(
+    {
+      sub: String(order.id),
+      type: 'order_review',
+      orderNumber: order.orderNumber,
+      email: order.customer?.email || null,
+      phone: order.customer?.phone || null,
+    },
+    ttl,
+    accessTokenSecret
+  );
+}
+
+function verifyOrderReviewToken(token) {
+  const payload = verifyJwt(token, accessTokenSecret);
+  if (payload.type !== 'order_review') {
+    throw new Error('Token type mismatch');
+  }
+  return payload;
+}
+
 function getRefreshExpiry(type) {
   const ttl = type === 'restaurant_user' ? restaurantRefreshTtl : customerRefreshTtl;
   return new Date(Date.now() + ttl * 1000);
@@ -102,6 +127,8 @@ module.exports = {
   verifyJwt,
   issueAccessToken,
   verifyAccessToken,
+  issueOrderReviewToken,
+  verifyOrderReviewToken,
   generateRefreshTokenValue,
   hashRefreshTokenValue,
   getRefreshExpiry,

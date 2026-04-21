@@ -99,6 +99,14 @@ const config = {
     otpMaxAttempts: number(process.env.OTP_MAX_ATTEMPTS, 5),
     otpLength: number(process.env.OTP_LENGTH, 6),
   },
+  publicLinks: {
+    orderReviewBaseUrl:
+      process.env.PUBLIC_ORDER_REVIEW_BASE_URL || 'https://go2pik.com/order',
+    orderReviewTokenTtlSeconds: number(
+      process.env.PUBLIC_ORDER_REVIEW_TOKEN_TTL_SECONDS,
+      60 * 60 * 24 * 7
+    ),
+  },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',

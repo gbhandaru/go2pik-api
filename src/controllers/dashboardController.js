@@ -30,11 +30,12 @@ const ordersReport = asyncHandler(async (req, res) => {
 });
 
 const partialAcceptOrder = asyncHandler(async (req, res) => {
-  const order = await partiallyAcceptOrderForRestaurant(req.params.orderId, req.body || {});
+  const result = await partiallyAcceptOrderForRestaurant(req.params.orderId, req.body || {});
   res.json({
     success: true,
     message: 'Order partially accepted successfully',
-    order,
+    order: result.order,
+    notification: result.notification || null,
   });
 });
 

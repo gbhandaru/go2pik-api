@@ -1,6 +1,7 @@
 const ApiError = require('../utils/errors');
 const config = require('../config/env');
 const { formatUsd } = require('../utils/currency');
+const { sendPartialAcceptanceSms } = require('./notificationService');
 const {
   listOrdersForRestaurant,
   listOrdersForRestaurantReport,
@@ -15,6 +16,7 @@ const SUPPORTED_ORDER_STATUSES = new Set([
   'ready_for_pickup',
   'completed',
   'rejected',
+  'cancelled',
 ]);
 
 const STATUS_TRANSITIONS = new Set([
@@ -72,6 +74,9 @@ function mapOrder(row) {
     acceptedAt: row.accepted_at || null,
     acceptanceMode: row.acceptance_mode || 'full',
     kitchenNote: row.kitchen_note || null,
+    customerAction: row.customer_action || 'none',
+    customerActionAt: row.customer_action_at || null,
+    customerActionNote: row.customer_action_note || null,
     items,
     acceptedItems: items.filter((item) => item.isAvailable !== false),
     unavailableItems: items.filter((item) => item.isAvailable === false),
@@ -135,6 +140,7 @@ function buildReportSummary(rows, range) {
     ready_for_pickup: 0,
     completed: 0,
     rejected: 0,
+    cancelled: 0,
   };
   const itemMap = new Map();
   let totalOrders = 0;
@@ -346,7 +352,29 @@ async function partiallyAcceptOrderForRestaurant(orderId, payload = {}) {
   if (!order) {
     throw ApiError.notFound('Order not found');
   }
-  return decorateOrder(mapOrder(order));
+  const decoratedOrder = decorateOrder(mapOrder(order));
+  let notification = { delivered: false, skipped: true, reason: 'not_attempted' };
+  try {
+    notification = await sendPartialAcceptanceSms(decoratedOrder);
+  } catch (error) {
+    notification = {
+      delivered: false,
+      skipped: false,
+      reason: 'provider_error',
+      error: error.message,
+    };
+    console.error('[dashboardService] partial acceptance SMS failed', {
+      orderId,
+      orderNumber: decoratedOrder.orderNumber,
+      error: error.message,
+      responseBody: error.responseBody,
+      statusCode: error.statusCode,
+    });
+  }
+  return {
+    order: decoratedOrder,
+    notification,
+  };
 }
 
 function buildStatusUpdate(nextStatus, options = {}) {

@@ -73,6 +73,8 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
 - `POST /api/orders` is disabled for direct client order creation; use the verification flow below. `GET /api/orders`, `GET /api/orders/:id`
+- `PATCH /api/orders/:id/accept-updated` and `PATCH /api/orders/:id/cancel` for authenticated customer review of partially accepted orders
+- `GET /api/orders/review/:orderNumber?token=...`, `PATCH /api/orders/review/:orderNumber/accept-updated?token=...`, and `PATCH /api/orders/review/:orderNumber/cancel?token=...` for SMS-driven order review
 - `POST /api/orders/verification/start`, `POST /api/orders/verification/confirm`, `POST /api/orders/verification/resend`, `POST /api/orders/verification/test`
 - `GET /api/health/twilio-verify`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
@@ -182,6 +184,26 @@ Request body:
 ```
 
 The response includes the updated order, accepted items, unavailable items, updated totals, and kitchen note.
+When partial acceptance succeeds, the backend also sends an SMS to the customer with a signed review link if Twilio is configured.
+
+### Customer Review Actions
+
+When a kitchen partially accepts an order, the customer can review it with:
+
+- `PATCH /api/orders/:id/accept-updated`
+- `PATCH /api/orders/:id/cancel`
+
+These endpoints require a valid customer bearer token and only work for partially accepted orders belonging to that customer.
+
+For SMS-driven review flows, the backend also exposes public tokenized endpoints:
+
+- `GET /api/orders/review/:orderNumber?token=...`
+- `PATCH /api/orders/review/:orderNumber/accept-updated?token=...`
+- `PATCH /api/orders/review/:orderNumber/cancel?token=...`
+
+The SMS link format is:
+
+`https://go2pik.com/order/<orderNumber>?token=<signed-token>`
 
 ### Restaurant Orders Report
 

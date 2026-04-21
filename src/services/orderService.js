@@ -2,6 +2,7 @@ const ApiError = require('../utils/errors');
 const config = require('../config/env');
 const { runOrderAutomation } = require('../utils/automation');
 const { formatUsd } = require('../utils/currency');
+const { normalizePhoneNumber } = require('../utils/phone');
 const { getRestaurantById } = require('./restaurantService');
 const { findCustomerById } = require('./customerService');
 const { sendOrderConfirmationEmail } = require('./notificationService');
@@ -9,8 +10,10 @@ const { validateScheduledPickupTime } = require('../utils/pickupHours');
 const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
+  getOrderByOrderNumber: fetchOrderByOrderNumber,
   listOrders: fetchOrders,
   listOrdersForCustomer: fetchOrdersForCustomer,
+  updateCustomerOrderAction,
 } = require('../repositories/orderRepository');
 
 const DEFAULT_TAX_RATE = Number(config.orders.defaultTaxRate || 0.08);
@@ -21,6 +24,7 @@ const SUPPORTED_ORDER_STATUSES = new Set([
   'ready_for_pickup',
   'completed',
   'rejected',
+  'cancelled',
 ]);
 
 function deriveEmailFromCustomer(customer = {}) {
@@ -105,6 +109,9 @@ function enrichOrderRow(row) {
     acceptedAt: row.accepted_at || null,
     acceptanceMode: row.acceptance_mode || 'full',
     kitchenNote: row.kitchen_note || null,
+    customerAction: row.customer_action || 'none',
+    customerActionAt: row.customer_action_at || null,
+    customerActionNote: row.customer_action_note || null,
     acceptedItems,
     unavailableItems,
   };
@@ -252,6 +259,14 @@ async function getOrderById(orderId) {
   return formatOrderAmounts(enrichOrderRow(row));
 }
 
+async function getOrderByNumber(orderNumber) {
+  const row = await fetchOrderByOrderNumber(orderNumber);
+  if (!row) {
+    throw ApiError.notFound('Order not found');
+  }
+  return formatOrderAmounts(enrichOrderRow(row));
+}
+
 async function getOrders(filters = {}) {
   const rawStatus = filters.status;
   const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : rawStatus;
@@ -288,11 +303,88 @@ async function getOrdersForCustomer(customer = {}, filters = {}) {
   return rows.map(enrichOrderRow).map(formatOrderAmounts);
 }
 
+function orderMatchesCustomer(order, customer = {}) {
+  const orderEmail = String(order.customer?.email || '').trim().toLowerCase();
+  const customerEmail = String(customer.email || '').trim().toLowerCase();
+  if (orderEmail && customerEmail && orderEmail === customerEmail) {
+    return true;
+  }
+  const orderPhone = normalizePhoneNumber(order.customer?.phone || '');
+  const customerPhone = normalizePhoneNumber(customer.phone || '');
+  if (orderPhone && customerPhone && orderPhone === customerPhone) {
+    return true;
+  }
+  return false;
+}
+
+async function acceptUpdatedOrder(orderId, customer = {}) {
+  const order = await getOrderById(orderId);
+  if (!order) {
+    throw ApiError.notFound('Order not found');
+  }
+  if (!orderMatchesCustomer(order, customer)) {
+    throw ApiError.forbidden('You are not authorized to access this order');
+  }
+  if (String(order.acceptanceMode || '').toLowerCase() !== 'partial') {
+    throw ApiError.conflict('Customer action is only available for partially accepted orders');
+  }
+  if (String(order.status || '').toLowerCase() === 'cancelled') {
+    throw ApiError.conflict('This order has already been cancelled');
+  }
+  const currentAction = String(order.customerAction || '').toLowerCase();
+  if (currentAction === 'accepted') {
+    return { order };
+  }
+  if (currentAction === 'cancelled') {
+    throw ApiError.conflict('This order has already been cancelled');
+  }
+  if (currentAction !== 'pending' && currentAction !== 'none') {
+    throw ApiError.conflict('This order is not waiting for customer action');
+  }
+  const updated = await updateCustomerOrderAction(orderId, {
+    customer,
+    action: 'accepted',
+  });
+  return { order: formatOrderAmounts(enrichOrderRow(updated)) };
+}
+
+async function cancelUpdatedOrder(orderId, customer = {}, note = null) {
+  const order = await getOrderById(orderId);
+  if (!order) {
+    throw ApiError.notFound('Order not found');
+  }
+  if (!orderMatchesCustomer(order, customer)) {
+    throw ApiError.forbidden('You are not authorized to access this order');
+  }
+  if (String(order.acceptanceMode || '').toLowerCase() !== 'partial') {
+    throw ApiError.conflict('Customer action is only available for partially accepted orders');
+  }
+  const currentAction = String(order.customerAction || '').toLowerCase();
+  if (String(order.status || '').toLowerCase() === 'cancelled' || currentAction === 'cancelled') {
+    return { order };
+  }
+  if (currentAction === 'accepted') {
+    throw ApiError.conflict('This order has already been accepted by the customer');
+  }
+  if (currentAction !== 'pending' && currentAction !== 'none') {
+    throw ApiError.conflict('This order is not waiting for customer action');
+  }
+  const updated = await updateCustomerOrderAction(orderId, {
+    customer,
+    action: 'cancelled',
+    note,
+  });
+  return { order: formatOrderAmounts(enrichOrderRow(updated)) };
+}
+
 module.exports = {
   createOrder,
   prepareOrderDraft,
   getOrderById,
+  getOrderByNumber,
   getOrders,
   getOrdersForCustomer,
+  acceptUpdatedOrder,
+  cancelUpdatedOrder,
   SUPPORTED_ORDER_STATUSES: Array.from(SUPPORTED_ORDER_STATUSES),
 };

@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const ApiError = require('../utils/errors');
+const { normalizePhoneNumber } = require('../utils/phone');
 
 function normalizeIdList(values = []) {
   return Array.from(
@@ -123,6 +124,9 @@ async function getOrderById(orderId) {
       o.accepted_at,
       o.acceptance_mode,
       o.kitchen_note,
+      o.customer_action,
+      o.customer_action_at,
+      o.customer_action_note,
       r.id AS restaurant_id,
       r.name AS restaurant_name,
       r.cuisine_type,
@@ -153,6 +157,64 @@ async function getOrderById(orderId) {
     GROUP BY o.id, r.id;
   `;
   const { rows } = await pool.query(query, [orderId]);
+  if (rows.length === 0) {
+    return null;
+  }
+  return rows[0];
+}
+
+async function getOrderByOrderNumber(orderNumber) {
+  const query = `
+    SELECT
+      o.id,
+      o.order_number,
+      o.customer_name,
+      o.customer_phone,
+      o.customer_email,
+      o.pickup_time,
+      o.notes,
+      o.subtotal,
+      o.tax_amount,
+      o.total_amount,
+      o.status,
+      o.payment_mode,
+      o.payment_status,
+      o.accepted_at,
+      o.acceptance_mode,
+      o.kitchen_note,
+      o.customer_action,
+      o.customer_action_at,
+      o.customer_action_note,
+      r.id AS restaurant_id,
+      r.name AS restaurant_name,
+      r.cuisine_type,
+      r.city,
+      r.state,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'id', oi.id,
+            'menuItemId', oi.menu_item_id,
+            'name', oi.item_name,
+            'quantity', oi.quantity,
+            'price', oi.unit_price,
+            'lineTotal', oi.line_total,
+            'specialInstructions', oi.special_instructions,
+            'isAvailable', COALESCE(oi.is_available, true),
+            'availabilityNote', oi.availability_note,
+            'markedUnavailableAt', oi.marked_unavailable_at
+          )
+          ORDER BY oi.id ASC
+        ) FILTER (WHERE oi.id IS NOT NULL),
+        '[]'
+      ) AS items
+    FROM orders o
+    JOIN restaurants r ON r.id = o.restaurant_id
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    WHERE o.order_number = $1
+    GROUP BY o.id, r.id;
+  `;
+  const { rows } = await pool.query(query, [orderNumber]);
   if (rows.length === 0) {
     return null;
   }
@@ -231,6 +293,9 @@ async function listOrders({
       o.accepted_at,
       o.acceptance_mode,
       o.kitchen_note,
+      o.customer_action,
+      o.customer_action_at,
+      o.customer_action_note,
       o.created_at,
       o.completed_at,
       r.id AS restaurant_id,
@@ -281,6 +346,115 @@ async function listOrdersForRestaurantReport(
 
 async function listOrdersForCustomer({ customerEmail = null, customerPhone = null, status = null, completedDate = null, timezone = 'America/Los_Angeles' } = {}) {
   return listOrders({ customerEmail, customerPhone, status, completedDate, timezone });
+}
+
+function normalizeCustomerEmail(email) {
+  return typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null;
+}
+
+function normalizeCustomerPhone(phone) {
+  const normalized = normalizePhoneNumber(phone);
+  return normalized || null;
+}
+
+function orderMatchesCustomer(order, customer = {}) {
+  const orderEmail = normalizeCustomerEmail(order.customer_email);
+  const customerEmail = normalizeCustomerEmail(customer.email);
+  if (orderEmail && customerEmail && orderEmail === customerEmail) {
+    return true;
+  }
+  const orderPhone = normalizeCustomerPhone(order.customer_phone);
+  const customerPhone = normalizeCustomerPhone(customer.phone);
+  if (orderPhone && customerPhone && orderPhone === customerPhone) {
+    return true;
+  }
+  return false;
+}
+
+async function updateCustomerOrderAction(orderId, { customer, action, note = null } = {}) {
+  const normalizedAction = String(action || '').trim().toLowerCase();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query(
+      `
+      SELECT
+        id,
+        customer_email,
+        customer_phone,
+        acceptance_mode,
+        customer_action,
+        status
+      FROM orders
+      WHERE id = $1
+      FOR UPDATE;
+      `,
+      [orderId]
+    );
+    if (orderResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const order = orderResult.rows[0];
+    if (!orderMatchesCustomer(order, customer)) {
+      throw ApiError.forbidden('You are not authorized to access this order');
+    }
+    if (String(order.acceptance_mode || '').toLowerCase() !== 'partial') {
+      throw ApiError.conflict('Customer action is only available for partially accepted orders');
+    }
+    if (String(order.status || '').toLowerCase() === 'cancelled' && normalizedAction !== 'cancelled') {
+      throw ApiError.conflict('This order has already been cancelled');
+    }
+    if (normalizedAction === 'accepted') {
+      if (String(order.customer_action || '').toLowerCase() === 'accepted') {
+        await client.query('COMMIT');
+        return getOrderById(orderId);
+      }
+      if (String(order.customer_action || '').toLowerCase() === 'cancelled') {
+        throw ApiError.conflict('This order has already been cancelled');
+      }
+      await client.query(
+        `
+        UPDATE orders
+        SET customer_action = 'accepted',
+            customer_action_at = COALESCE(customer_action_at, now()),
+            customer_action_note = NULL,
+            updated_at = now()
+        WHERE id = $1;
+        `,
+        [orderId]
+      );
+    } else if (normalizedAction === 'cancelled') {
+      if (String(order.customer_action || '').toLowerCase() === 'cancelled') {
+        await client.query('COMMIT');
+        return getOrderById(orderId);
+      }
+      if (String(order.customer_action || '').toLowerCase() === 'accepted') {
+        throw ApiError.conflict('This order has already been accepted by the customer');
+      }
+      await client.query(
+        `
+        UPDATE orders
+        SET status = 'cancelled',
+            customer_action = 'cancelled',
+            customer_action_at = now(),
+            customer_action_note = $2,
+            updated_at = now()
+        WHERE id = $1;
+        `,
+        [orderId, note || null]
+      );
+    } else {
+      throw ApiError.badRequest('Unsupported customer action');
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return getOrderById(orderId);
 }
 
 async function partiallyAcceptOrder(orderId, {
@@ -405,6 +579,9 @@ async function partiallyAcceptOrder(orderId, {
           status = 'accepted',
           accepted_at = COALESCE(accepted_at, now()),
           acceptance_mode = 'partial',
+          customer_action = 'pending',
+          customer_action_at = NULL,
+          customer_action_note = NULL,
           kitchen_note = $5,
           updated_at = now()
       WHERE id = $1;
@@ -449,10 +626,12 @@ async function updateOrderStatus(orderId, updates) {
 module.exports = {
   createOrder: createOrderRecord,
   getOrderById,
+  getOrderByOrderNumber,
   listOrders,
   listOrdersForRestaurant,
   listOrdersForRestaurantReport,
   listOrdersForCustomer,
   partiallyAcceptOrder,
+  updateCustomerOrderAction,
   updateOrderStatus,
 };
