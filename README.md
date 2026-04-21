@@ -76,6 +76,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/orders/verification/start`, `POST /api/orders/verification/confirm`, `POST /api/orders/verification/resend`, `POST /api/orders/verification/test`
 - `GET /api/health/twilio-verify`
 - `GET /api/dashboard/restaurants/:restaurantId/orders` plus `/orders/:orderId/(accept|preparing|ready|complete|reject)`
+- `PATCH /api/dashboard/orders/:orderId/partial-accept`
 - `GET /api/dashboard/restaurants/:restaurantId/reports/orders?today=true` or `?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - Menu maintenance via `GET/POST /api/dashboard/restaurants/:restaurantId/menu` and `PUT/PATCH /api/dashboard/menu-items/:menuItemId`
 - Menu category management via `GET/POST /api/dashboard/restaurants/:restaurantId/menu/categories` and `PUT /api/dashboard/restaurants/:restaurantId/menu/categories/:categoryId`
@@ -161,6 +162,26 @@ For the Completed tab, fetch only orders completed on a specific calendar day:
   - `GET /api/dashboard/restaurants/12/orders?status=completedToday`
 
 The completed-day filter uses the dashboard timezone, defaulting to `America/Los_Angeles` unless `DASHBOARD_TIMEZONE` is set.
+
+### Partial Kitchen Acceptance
+
+Use `PATCH /api/dashboard/orders/:orderId/partial-accept` to accept some items and mark the rest unavailable.
+
+Use the order item ids returned by `order.items[].id` in the request arrays.
+
+Request body:
+
+```json
+{
+  "accepted_item_ids": [1, 2],
+  "accepted_items": [{ "id": 1 }, { "id": 2 }],
+  "unavailable_item_ids": [3],
+  "rejected_items": [{ "id": 3 }],
+  "note": "Out of stock on item 3"
+}
+```
+
+The response includes the updated order, accepted items, unavailable items, updated totals, and kitchen note.
 
 ### Restaurant Orders Report
 

@@ -1,4 +1,21 @@
 const pool = require('../config/db');
+const ApiError = require('../utils/errors');
+
+function normalizeIdList(values = []) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => {
+          if (value === null || value === undefined || value === '') {
+            return null;
+          }
+          const id = Number(value);
+          return Number.isFinite(id) ? id : null;
+        })
+        .filter((value) => value !== null)
+    )
+  );
+}
 
 async function createOrderRecord({ restaurantId, customer, items, totals }) {
   const client = await pool.connect();
@@ -103,6 +120,9 @@ async function getOrderById(orderId) {
       o.status,
       o.payment_mode,
       o.payment_status,
+      o.accepted_at,
+      o.acceptance_mode,
+      o.kitchen_note,
       r.id AS restaurant_id,
       r.name AS restaurant_name,
       r.cuisine_type,
@@ -111,12 +131,16 @@ async function getOrderById(orderId) {
       COALESCE(
         json_agg(
           json_build_object(
+            'id', oi.id,
             'menuItemId', oi.menu_item_id,
             'name', oi.item_name,
             'quantity', oi.quantity,
             'price', oi.unit_price,
             'lineTotal', oi.line_total,
-            'specialInstructions', oi.special_instructions
+            'specialInstructions', oi.special_instructions,
+            'isAvailable', COALESCE(oi.is_available, true),
+            'availabilityNote', oi.availability_note,
+            'markedUnavailableAt', oi.marked_unavailable_at
           )
           ORDER BY oi.id ASC
         ) FILTER (WHERE oi.id IS NOT NULL),
@@ -204,6 +228,9 @@ async function listOrders({
       o.status,
       o.payment_mode,
       o.payment_status,
+      o.accepted_at,
+      o.acceptance_mode,
+      o.kitchen_note,
       o.created_at,
       o.completed_at,
       r.id AS restaurant_id,
@@ -214,12 +241,16 @@ async function listOrders({
       COALESCE(
         json_agg(
           json_build_object(
+            'id', oi.id,
             'menuItemId', oi.menu_item_id,
             'name', oi.item_name,
             'quantity', oi.quantity,
             'price', oi.unit_price,
             'lineTotal', oi.line_total,
-            'specialInstructions', oi.special_instructions
+            'specialInstructions', oi.special_instructions,
+            'isAvailable', COALESCE(oi.is_available, true),
+            'availabilityNote', oi.availability_note,
+            'markedUnavailableAt', oi.marked_unavailable_at
           )
           ORDER BY oi.id ASC
         ) FILTER (WHERE oi.id IS NOT NULL),
@@ -252,6 +283,146 @@ async function listOrdersForCustomer({ customerEmail = null, customerPhone = nul
   return listOrders({ customerEmail, customerPhone, status, completedDate, timezone });
 }
 
+async function partiallyAcceptOrder(orderId, {
+  acceptedItemIds = [],
+  unavailableItemIds = [],
+  note = null,
+  taxRate = 0.08,
+} = {}) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query(
+      `
+      SELECT id, restaurant_id, status, acceptance_mode
+      FROM orders
+      WHERE id = $1
+      FOR UPDATE;
+      `,
+      [orderId]
+    );
+    if (orderResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const order = orderResult.rows[0];
+    if (String(order.status || '').toLowerCase() !== 'new') {
+      throw ApiError.conflict('Only new orders can be partially accepted');
+    }
+
+    const itemsResult = await client.query(
+      `
+      SELECT
+        id,
+        menu_item_id,
+        item_name,
+        unit_price,
+        quantity,
+        line_total,
+        special_instructions,
+        COALESCE(is_available, true) AS is_available,
+        availability_note,
+        marked_unavailable_at
+      FROM order_items
+      WHERE order_id = $1
+      ORDER BY id ASC
+      FOR UPDATE;
+      `,
+      [orderId]
+    );
+
+    const items = itemsResult.rows;
+    if (items.length === 0) {
+      throw ApiError.badRequest('Order has no items');
+    }
+
+    const acceptedIds = normalizeIdList(acceptedItemIds);
+    const unavailableIds = normalizeIdList(unavailableItemIds);
+    if (acceptedIds.length === 0) {
+      throw ApiError.validation('partial_accept_requires_at_least_one_item', 'At least one item must be accepted');
+    }
+
+    const overlap = acceptedIds.filter((id) => unavailableIds.includes(id));
+    if (overlap.length > 0) {
+      throw ApiError.validation('partial_accept_duplicate_item_ids', 'Item ids cannot appear in both accepted and unavailable lists');
+    }
+
+    const orderItemIds = items.map((item) => Number(item.id));
+    const unknownIds = [...acceptedIds, ...unavailableIds].filter((id) => !orderItemIds.includes(id));
+    if (unknownIds.length > 0) {
+      throw ApiError.validation('partial_accept_unknown_item_ids', 'One or more item ids do not belong to this order');
+    }
+
+    const classifiedIds = new Set([...acceptedIds, ...unavailableIds]);
+    if (classifiedIds.size !== orderItemIds.length) {
+      throw ApiError.validation(
+        'partial_accept_requires_all_items_to_be_classified',
+        'All order items must be marked as accepted or unavailable'
+      );
+    }
+
+    const acceptedRows = items.filter((item) => acceptedIds.includes(Number(item.id)));
+    const unavailableRows = items.filter((item) => unavailableIds.includes(Number(item.id)));
+
+    for (const item of acceptedRows) {
+      await client.query(
+        `
+        UPDATE order_items
+        SET is_available = true,
+            availability_note = NULL,
+            marked_unavailable_at = NULL
+        WHERE id = $1;
+        `,
+        [item.id]
+      );
+    }
+
+    for (const item of unavailableRows) {
+      await client.query(
+        `
+        UPDATE order_items
+        SET is_available = false,
+            availability_note = $2,
+            marked_unavailable_at = now()
+        WHERE id = $1;
+        `,
+        [item.id, note || null]
+      );
+    }
+
+    const subtotal = acceptedRows.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
+    const taxAmount = Number((subtotal * Number(taxRate || 0)).toFixed(2));
+    const totalAmount = Number((subtotal + taxAmount).toFixed(2));
+
+    await client.query(
+      `
+      UPDATE orders
+      SET subtotal = $2,
+          tax_amount = $3,
+          total_amount = $4,
+          status = 'accepted',
+          accepted_at = COALESCE(accepted_at, now()),
+          acceptance_mode = 'partial',
+          kitchen_note = $5,
+          updated_at = now()
+      WHERE id = $1;
+      `,
+      [orderId, subtotal, taxAmount, totalAmount, note || null]
+    );
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  return getOrderById(orderId);
+}
+
 async function updateOrderStatus(orderId, updates) {
   const setStatements = [];
   const params = [];
@@ -282,5 +453,6 @@ module.exports = {
   listOrdersForRestaurant,
   listOrdersForRestaurantReport,
   listOrdersForCustomer,
+  partiallyAcceptOrder,
   updateOrderStatus,
 };

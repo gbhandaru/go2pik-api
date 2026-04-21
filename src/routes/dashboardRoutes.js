@@ -4,6 +4,7 @@ const multer = require('multer');
 const {
   listOrders,
   ordersReport,
+  partialAcceptOrder,
   acceptOrder,
   markPreparing,
   markReady,
@@ -29,6 +30,7 @@ const upload = multer({
 
 router.get('/restaurants/:restaurantId/orders', listOrders);
 router.get('/restaurants/:restaurantId/reports/orders', ordersReport);
+router.patch('/orders/:orderId/partial-accept', partialAcceptOrder);
 router.patch('/orders/:orderId/accept', acceptOrder);
 router.patch('/orders/:orderId/preparing', markPreparing);
 router.patch('/orders/:orderId/ready', markReady);

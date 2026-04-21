@@ -1,8 +1,10 @@
 const ApiError = require('../utils/errors');
+const config = require('../config/env');
 const { formatUsd } = require('../utils/currency');
 const {
   listOrdersForRestaurant,
   listOrdersForRestaurantReport,
+  partiallyAcceptOrder,
   updateOrderStatus,
 } = require('../repositories/orderRepository');
 
@@ -41,6 +43,16 @@ function getDateStringInTimezone(date, timezone) {
 
 function mapOrder(row) {
   const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
+  const items = rawItems.map((item) => ({
+    id: item.id,
+    ...item,
+    quantity: Number(item.quantity),
+    price: Number(item.price),
+    lineTotal: Number(item.lineTotal),
+    isAvailable: item.isAvailable !== undefined ? item.isAvailable : item.is_available !== undefined ? item.is_available : true,
+    availabilityNote: item.availabilityNote || item.availability_note || null,
+    markedUnavailableAt: item.markedUnavailableAt || item.marked_unavailable_at || null,
+  }));
   return {
     id: row.id,
     orderNumber: row.order_number,
@@ -57,12 +69,12 @@ function mapOrder(row) {
     createdAt: row.created_at,
     pickupTime: row.pickup_time,
     completedAt: row.completed_at,
-    items: rawItems.map((item) => ({
-      ...item,
-      quantity: Number(item.quantity),
-      price: Number(item.price),
-      lineTotal: Number(item.lineTotal),
-    })),
+    acceptedAt: row.accepted_at || null,
+    acceptanceMode: row.acceptance_mode || 'full',
+    kitchenNote: row.kitchen_note || null,
+    items,
+    acceptedItems: items.filter((item) => item.isAvailable !== false),
+    unavailableItems: items.filter((item) => item.isAvailable === false),
   };
 }
 
@@ -231,6 +243,112 @@ async function getOrdersReportForRestaurant(restaurantId, filters = {}) {
   return buildReportSummary(rows, range);
 }
 
+function normalizePartialAcceptItemId(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const id = Number(value);
+  return Number.isFinite(id) ? id : null;
+}
+
+function extractItemIds(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) =>
+      normalizePartialAcceptItemId(
+        item?.id ?? item?.orderItemId ?? item?.order_item_id ?? item?.menuItemId ?? item?.menu_item_id
+      )
+    )
+    .filter((value) => value !== null);
+}
+
+function normalizeIds(values = []) {
+  return (Array.isArray(values) ? values : [])
+    .map(normalizePartialAcceptItemId)
+    .filter((value) => value !== null);
+}
+
+function uniqueIds(values = []) {
+  return Array.from(new Set(normalizeIds(values)));
+}
+
+function findDuplicateIds(values = []) {
+  const seen = new Set();
+  const duplicates = new Set();
+  normalizeIds(values).forEach((id) => {
+    if (seen.has(id)) {
+      duplicates.add(id);
+    } else {
+      seen.add(id);
+    }
+  });
+  return Array.from(duplicates);
+}
+
+function validateMatchingIdSets(acceptedIds, unavailableIds, acceptedItems, rejectedItems) {
+  const acceptedItemIds = uniqueIds(extractItemIds(acceptedItems));
+  const rejectedItemIds = uniqueIds(extractItemIds(rejectedItems));
+  if (acceptedItemIds.length > 0 && acceptedItemIds.some((id) => !acceptedIds.includes(id))) {
+    throw ApiError.validation(
+      'partial_accept_item_payload_mismatch',
+      'accepted_items does not match accepted_item_ids'
+    );
+  }
+  if (rejectedItemIds.length > 0 && rejectedItemIds.some((id) => !unavailableIds.includes(id))) {
+    throw ApiError.validation(
+      'partial_accept_item_payload_mismatch',
+      'rejected_items does not match unavailable_item_ids'
+    );
+  }
+}
+
+async function partiallyAcceptOrderForRestaurant(orderId, payload = {}) {
+  const hasAcceptedIdField =
+    Object.prototype.hasOwnProperty.call(payload, 'accepted_item_ids') ||
+    Object.prototype.hasOwnProperty.call(payload, 'acceptedItemIds');
+  const hasUnavailableIdField =
+    Object.prototype.hasOwnProperty.call(payload, 'unavailable_item_ids') ||
+    Object.prototype.hasOwnProperty.call(payload, 'unavailableItemIds');
+
+  const acceptedIdsRaw = hasAcceptedIdField
+    ? payload.accepted_item_ids || payload.acceptedItemIds || []
+    : payload.accepted_items || payload.acceptedItems || [];
+  const unavailableIdsRaw = hasUnavailableIdField
+    ? payload.unavailable_item_ids || payload.unavailableItemIds || []
+    : payload.rejected_items || payload.rejectedItems || [];
+
+  const acceptedDuplicates = findDuplicateIds(acceptedIdsRaw);
+  const unavailableDuplicates = findDuplicateIds(unavailableIdsRaw);
+  if (acceptedDuplicates.length > 0 || unavailableDuplicates.length > 0) {
+    throw ApiError.validation(
+      'partial_accept_duplicate_item_ids',
+      'Duplicate item ids are not allowed',
+      {
+        acceptedDuplicateIds: acceptedDuplicates,
+        unavailableDuplicateIds: unavailableDuplicates,
+      }
+    );
+  }
+
+  const acceptedIds = uniqueIds(acceptedIdsRaw);
+  const unavailableIds = uniqueIds(unavailableIdsRaw);
+  const acceptedItems = payload.accepted_items || payload.acceptedItems || [];
+  const rejectedItems = payload.rejected_items || payload.rejectedItems || [];
+  const note = typeof payload.note === 'string' ? payload.note.trim() : '';
+
+  validateMatchingIdSets(acceptedIds, unavailableIds, acceptedItems, rejectedItems);
+
+  const order = await partiallyAcceptOrder(orderId, {
+    acceptedItemIds: acceptedIds,
+    unavailableItemIds: unavailableIds,
+    note,
+    taxRate: Number(config.orders.defaultTaxRate || 0.08),
+  });
+  if (!order) {
+    throw ApiError.notFound('Order not found');
+  }
+  return decorateOrder(mapOrder(order));
+}
+
 function buildStatusUpdate(nextStatus, options = {}) {
   if (!STATUS_TRANSITIONS.has(nextStatus)) {
     throw ApiError.badRequest(`Unsupported status: ${nextStatus}`);
@@ -264,6 +382,7 @@ async function updateStatus(orderId, nextStatus, options = {}) {
 module.exports = {
   getOrdersForRestaurant,
   getOrdersReportForRestaurant,
+  partiallyAcceptOrderForRestaurant,
   updateStatus,
   SUPPORTED_ORDER_STATUSES: Array.from(SUPPORTED_ORDER_STATUSES),
 };

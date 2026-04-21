@@ -68,11 +68,17 @@ function enrichOrderRow(row) {
   if (!row) return row;
   const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
   const items = rawItems.map((item) => ({
+    id: item.id,
     ...item,
     quantity: Number(item.quantity),
     price: Number(item.price),
     lineTotal: Number(item.lineTotal),
+    isAvailable: item.isAvailable !== undefined ? item.isAvailable : item.is_available !== undefined ? item.is_available : true,
+    availabilityNote: item.availabilityNote || item.availability_note || null,
+    markedUnavailableAt: item.markedUnavailableAt || item.marked_unavailable_at || null,
   }));
+  const acceptedItems = items.filter((item) => item.isAvailable !== false);
+  const unavailableItems = items.filter((item) => item.isAvailable === false);
   return {
     id: row.id,
     orderNumber: row.order_number,
@@ -96,6 +102,11 @@ function enrichOrderRow(row) {
     status: row.status,
     paymentMode: row.payment_mode,
     paymentStatus: row.payment_status,
+    acceptedAt: row.accepted_at || null,
+    acceptanceMode: row.acceptance_mode || 'full',
+    kitchenNote: row.kitchen_note || null,
+    acceptedItems,
+    unavailableItems,
   };
 }
 
