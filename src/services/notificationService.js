@@ -1,5 +1,7 @@
 const config = require('../config/env');
 const { formatUsd } = require('../utils/currency');
+const { sendSms } = require('./twilioSmsService');
+const { issueOrderReviewToken } = require('../utils/token');
 
 function isEmailConfigured() {
   const { notifications } = config;
@@ -43,6 +45,58 @@ function renderItems(items = []) {
       return `${quantity} x ${name} @ ${price} = ${lineTotal}`;
     })
     .join('\n');
+}
+
+function isSmsConfigured() {
+  const { twilio } = config;
+  return Boolean(twilio?.accountSid && twilio?.authToken && twilio?.phoneNumber);
+}
+
+function buildOrderReviewLink(order, token) {
+  const baseUrl = String(config.publicLinks?.orderReviewBaseUrl || 'https://go2pik.com/order').replace(/\/+$/, '');
+  return `${baseUrl}/${encodeURIComponent(order.orderNumber)}?token=${encodeURIComponent(token)}`;
+}
+
+function formatPartialAcceptanceSummary(order) {
+  const unavailableCount = Array.isArray(order.unavailableItems) ? order.unavailableItems.length : 0;
+  if (unavailableCount === 1) {
+    return '1 item unavailable.';
+  }
+  return `${unavailableCount} items unavailable.`;
+}
+
+function buildPartialAcceptanceSms(order, token) {
+  const restaurantName = order.restaurant?.name || 'Go2Pik';
+  const link = buildOrderReviewLink(order, token);
+  return [
+    `Go2Pik: ${restaurantName} updated your order.`,
+    formatPartialAcceptanceSummary(order),
+    '',
+    'Review & confirm your order:',
+    link,
+  ].join('\n');
+}
+
+async function sendPartialAcceptanceSms(order) {
+  if (!order?.customer?.phone) {
+    return { delivered: false, skipped: true, reason: 'missing_customer_phone' };
+  }
+  if (!isSmsConfigured()) {
+    return { delivered: false, skipped: true, reason: 'not_configured' };
+  }
+  const token = issueOrderReviewToken(order);
+  const body = buildPartialAcceptanceSms(order, token);
+  const result = await sendSms({
+    to: order.customer.phone,
+    body,
+  });
+  return {
+    delivered: true,
+    skipped: false,
+    token,
+    messageSid: result?.sid || null,
+    body,
+  };
 }
 
 function buildOrderEmail(order) {
@@ -337,6 +391,10 @@ async function sendOrderConfirmationEmail(order) {
 module.exports = {
   sendOrderConfirmationEmail,
   isEmailConfigured,
+  isSmsConfigured,
+  buildOrderReviewLink,
+  buildPartialAcceptanceSms,
+  sendPartialAcceptanceSms,
   sendWelcomeEmail,
   sendTestEmail,
 };
