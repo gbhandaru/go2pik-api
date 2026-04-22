@@ -93,6 +93,9 @@ const config = {
   orders: {
     defaultTaxRate: Number(process.env.DEFAULT_TAX_RATE || 0.08),
   },
+  reports: {
+    defaultCommissionRate: number(process.env.REPORTS_DEFAULT_COMMISSION_RATE, 0.05),
+  },
   verification: {
     otpExpiryMinutes: number(process.env.OTP_EXPIRY_MINUTES, 10),
     otpResendCooldownSeconds: number(process.env.OTP_RESEND_COOLDOWN_SECONDS, 30),
