@@ -40,16 +40,21 @@ async function fetchTwilioAccountDetails() {
 }
 
 async function sendSms({ to, body }) {
-  const { phoneNumber } = config.twilio || {};
-  if (!phoneNumber) {
-    throw ApiError.badRequest('TWILIO_PHONE_NUMBER is not configured');
+  const { phoneNumber, messagingServiceSid } = config.twilio || {};
+  if (!messagingServiceSid && !phoneNumber) {
+    throw ApiError.badRequest('TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER is not configured');
   }
   const client = getTwilioClient();
-  return client.messages.create({
-    from: phoneNumber,
+  const payload = {
     to,
     body,
-  });
+  };
+  if (messagingServiceSid) {
+    payload.messagingServiceSid = messagingServiceSid;
+  } else {
+    payload.from = phoneNumber;
+  }
+  return client.messages.create(payload);
 }
 
 module.exports = {
