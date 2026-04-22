@@ -1,5 +1,6 @@
 const config = require('../config/env');
 const { formatUsd } = require('../utils/currency');
+const { normalizePhoneNumber, isE164PhoneNumber } = require('../utils/phone');
 const { sendSms } = require('./twilioSmsService');
 const { issueOrderReviewToken } = require('../utils/token');
 
@@ -78,17 +79,43 @@ function buildPartialAcceptanceSms(order, token) {
 }
 
 async function sendPartialAcceptanceSms(order) {
-  if (!order?.customer?.phone) {
+  const rawPhone = order?.customer?.phone || '';
+  const normalizedPhone = normalizePhoneNumber(rawPhone);
+  if (!normalizedPhone) {
+    console.warn('[notification] skipping partial acceptance SMS: missing customer phone', {
+      orderNumber: order?.orderNumber || null,
+      customerPhonePresent: Boolean(rawPhone),
+    });
     return { delivered: false, skipped: true, reason: 'missing_customer_phone' };
   }
+  if (!isE164PhoneNumber(normalizedPhone)) {
+    console.warn('[notification] skipping partial acceptance SMS: invalid phone format', {
+      orderNumber: order?.orderNumber || null,
+      phone: normalizedPhone,
+    });
+    return {
+      delivered: false,
+      skipped: true,
+      reason: 'invalid_customer_phone_format',
+      phone: normalizedPhone,
+    };
+  }
   if (!isSmsConfigured()) {
+    console.warn('[notification] skipping partial acceptance SMS: Twilio not configured', {
+      orderNumber: order?.orderNumber || null,
+    });
     return { delivered: false, skipped: true, reason: 'not_configured' };
   }
   const token = issueOrderReviewToken(order);
   const body = buildPartialAcceptanceSms(order, token);
   const result = await sendSms({
-    to: order.customer.phone,
+    to: normalizedPhone,
     body,
+  });
+  console.log('[notification] partial acceptance SMS delivered', {
+    orderNumber: order?.orderNumber || null,
+    to: normalizedPhone,
+    messageSid: result?.sid || null,
   });
   return {
     delivered: true,
