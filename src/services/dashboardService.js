@@ -143,6 +143,7 @@ function buildReportSummary(rows, range) {
     cancelled: 0,
   };
   const itemMap = new Map();
+  const dailySeriesMap = new Map();
   let totalOrders = 0;
   let totalAmount = 0;
   let totalSubtotal = 0;
@@ -154,6 +155,20 @@ function buildReportSummary(rows, range) {
     const normalizedStatus = String(row.status || '').toLowerCase();
     if (Object.prototype.hasOwnProperty.call(statusCounts, normalizedStatus)) {
       statusCounts[normalizedStatus] += 1;
+    }
+
+    const createdDate = row.created_at
+      ? getDateStringInTimezone(new Date(row.created_at), DASHBOARD_TIMEZONE)
+      : null;
+    if (createdDate) {
+      const existing = dailySeriesMap.get(createdDate) || {
+        date: createdDate,
+        orders: 0,
+        amount: 0,
+      };
+      existing.orders += 1;
+      existing.amount += Number(row.total_amount || 0);
+      dailySeriesMap.set(createdDate, existing);
     }
 
     const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
@@ -175,6 +190,45 @@ function buildReportSummary(rows, range) {
     });
   });
 
+  function buildDateSeries(startDate, endDate) {
+    if (!startDate || !endDate) {
+      return [];
+    }
+    const start = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return [];
+    }
+    const series = [];
+    for (let cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+      const dateKey = cursor.toISOString().slice(0, 10);
+      const point = dailySeriesMap.get(dateKey) || {
+        date: dateKey,
+        orders: 0,
+        amount: 0,
+      };
+      series.push({
+        date: point.date,
+        orders: point.orders,
+        amount: Number(point.amount.toFixed(2)),
+        amountDisplay: formatUsd(point.amount),
+        avgOrder: point.orders > 0 ? Number((point.amount / point.orders).toFixed(2)) : 0,
+      });
+    }
+    return series;
+  }
+
+  const graphSeries = buildDateSeries(range.from, range.to);
+  const avgOrder = totalOrders > 0 ? Number((totalAmount / totalOrders).toFixed(2)) : 0;
+  const pendingOrders =
+    (statusCounts.new || 0) +
+    (statusCounts.accepted || 0) +
+    (statusCounts.preparing || 0) +
+    (statusCounts.ready_for_pickup || 0);
+  const commissionRate = Number(config.reports?.defaultCommissionRate || 0);
+  const commissionAmount = Number((totalAmount * commissionRate).toFixed(2));
+  const restaurantNetAmount = Number((totalAmount - commissionAmount).toFixed(2));
+
   const items = Array.from(itemMap.values())
     .map((item) => ({
       ...item,
@@ -193,7 +247,16 @@ function buildReportSummary(rows, range) {
       amount: Number(totalAmount.toFixed(2)),
       amountDisplay: formatUsd(totalAmount),
     },
+    avgOrder,
+    avgOrderDisplay: formatUsd(avgOrder),
+    pendingOrders,
+    commissionRate,
+    commissionAmount,
+    commissionAmountDisplay: formatUsd(commissionAmount),
+    restaurantNetAmount,
+    restaurantNetAmountDisplay: formatUsd(restaurantNetAmount),
     statusCounts,
+    graphSeries,
     items,
   };
 }
