@@ -46,11 +46,17 @@ async function getAllRestaurants(filter = {}) {
   try {
     const restaurants = await fetchRestaurantsFromDb(filter);
     if (restaurants.length === 0) {
+    if(config.deploymentStage === 'production') {
+    return [];
+    }
       return getFallbackRestaurants();
     }
     return restaurants;
   } catch (error) {
     console.warn('[restaurantService] falling back to static data', error.message);
+        if(config.deploymentStage === 'production') {
+        throw error;
+        }
     return getFallbackRestaurants();
   }
 }
