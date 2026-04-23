@@ -89,6 +89,8 @@ function groupRestaurants(rows) {
 async function fetchRestaurantsFromDb({ restaurantId, city } = {}) {
   const params = [];
   const conditions = [];
+  const dbNameResult = await pool.query('select current_database() as db, current_user as usr');
+  console.log('[db-check]', dbNameResult.rows[0]);
   if (restaurantId) {
     params.push(restaurantId);
     conditions.push(`r.id = $${params.length}`);
