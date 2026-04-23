@@ -1,4 +1,5 @@
 const ApiError = require('../utils/errors');
+const config = require('../config/env');
 const { buildPickupAvailability, normalizePickupHours } = require('../utils/pickupHours');
 const {
   fetchRestaurantsFromDb,
