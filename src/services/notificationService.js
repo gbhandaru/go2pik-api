@@ -26,13 +26,8 @@ function resolvePickupTimeLabel(order = {}) {
   const customerDisplayTime = pickTrimmedString(customer.pickupDisplayTime);
   const requestDisplayTime = pickTrimmedString(pickupRequest.displayTime);
   const pickupTime = pickTrimmedString(customer.pickupTime);
-  const displayTime = customerDisplayTime || requestDisplayTime;
 
-  if (displayTime) {
-    return summary ? `${summary} ${displayTime}` : displayTime;
-  }
-
-  return pickupTime || 'Pickup time not provided';
+  return summary || customerDisplayTime || requestDisplayTime || pickupTime || 'Pickup time not provided';
 }
 
 function renderItems(items = []) {
