@@ -151,13 +151,21 @@ async function createOrder(payload = {}) {
     total,
   });
   const persisted = await getOrderById(orderId);
+  const notificationOrder = {
+    ...persisted,
+    customer: {
+      ...(persisted.customer || {}),
+      pickupDisplayTime: draft.customer?.pickupDisplayTime || null,
+    },
+    pickupRequest: draft.pickupRequest || payload.pickupRequest || null,
+  };
   console.log('[orderService] preparing notification', {
     orderId,
     orderNumber: persisted.orderNumber,
     customerEmail: persisted.customer?.email,
     notificationsProvider: config.notifications.provider,
   });
-  const notification = await sendOrderConfirmationEmail(persisted);
+  const notification = await sendOrderConfirmationEmail(notificationOrder);
   return {
     order: persisted,
     automation: automationResult,
@@ -248,6 +256,7 @@ async function prepareOrderDraft(payload = {}) {
     totals: { subtotal, tax, total },
     pickupType,
     pickupTime,
+    pickupRequest: payload.pickupRequest || null,
   };
 }
 

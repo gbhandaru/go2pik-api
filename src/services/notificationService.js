@@ -15,22 +15,24 @@ function isEmailConfigured() {
   return Boolean(notifications.providerUrl && notifications.apiKey);
 }
 
-function formatPickupTime(value) {
-  if (!value) return 'Pickup time not provided';
-  try {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return 'Pickup time not provided';
-    }
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: config.notifications.timezone || 'UTC',
-    });
-    return formatter.format(date);
-  } catch (error) {
-    return 'Pickup time not provided';
+function pickTrimmedString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function resolvePickupTimeLabel(order = {}) {
+  const customer = order.customer || {};
+  const pickupRequest = order.pickupRequest || {};
+  const summary = pickTrimmedString(pickupRequest.summary);
+  const customerDisplayTime = pickTrimmedString(customer.pickupDisplayTime);
+  const requestDisplayTime = pickTrimmedString(pickupRequest.displayTime);
+  const pickupTime = pickTrimmedString(customer.pickupTime);
+  const displayTime = customerDisplayTime || requestDisplayTime;
+
+  if (displayTime) {
+    return summary ? `${summary} ${displayTime}` : displayTime;
   }
+
+  return pickupTime || 'Pickup time not provided';
 }
 
 function renderItems(items = []) {
@@ -128,7 +130,7 @@ async function sendPartialAcceptanceSms(order) {
 
 function buildOrderEmail(order) {
   const { orderNumber, restaurant = {}, customer = {} } = order;
-  const pickupTime = formatPickupTime(customer.pickupTime);
+  const pickupTime = resolvePickupTimeLabel(order);
   const totalAmount = order.totalDisplay || formatUsd(order.total || 0);
   const itemsText = renderItems(order.items || []);
   const subject = `Order ${orderNumber} confirmed at ${restaurant.name || 'Go2Pik'}`;
