@@ -1,0 +1,838 @@
+openapi: 3.0.3
+info:
+  title: Go2Pik API - Admin Restaurant Onboarding
+  version: 1.0.0
+  description: OpenAPI spec for admin-only restaurant onboarding, restaurant user management, and menu administration.
+servers:
+  - url: /api
+tags:
+  - name: Restaurants
+    description: Restaurant catalog and menu lookup
+  - name: RestaurantUsers
+    description: Restaurant user onboarding and management
+  - name: Menu
+    description: Menu categories and export/import
+  - name: MenuItems
+    description: Menu item administration
+security:
+  - basicAuth: []
+paths:
+  /restaurants:
+    post:
+      tags: [Restaurants]
+      summary: Create a restaurant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantCreateRequest'
+            example:
+              name: Pik Thai
+              cuisine_type: Thai
+              city: Fremont
+              state: CA
+              address_line1: 123 Main St
+              slug: pik-thai
+      responses:
+        '201':
+          description: Restaurant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantEnvelope'
+              example:
+                restaurant:
+                  id: 12
+                  slug: pik-thai
+                  name: Pik Thai
+                  cuisine: Thai
+                  location: Fremont, CA
+                  address:
+                    line1: 123 Main St
+                    city: Fremont
+                    state: CA
+                    formatted: Fremont, CA
+                  openHours:
+                    timezone: UTC
+                    weeklySchedule: {}
+                  pickupAvailability:
+                    isOpenNow: false
+                    asapAllowed: false
+                    message: Currently unavailable
+                  isOpenNow: false
+                  asapAllowed: false
+                  categories: []
+                  menu: []
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Restaurants]
+      summary: List restaurants
+      responses:
+        '200':
+          description: Restaurant list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantListResponse'
+              example:
+                - id: 12
+                  name: Pik Thai
+                  cuisine: Thai
+                  location: Fremont, CA
+                  address:
+                    line1: 123 Main St
+                    city: Fremont
+                    state: CA
+                    formatted: Fremont, CA
+                  openHours:
+                    timezone: America/Los_Angeles
+                    schedule: []
+                  pickupAvailability:
+                    isOpenNow: true
+                    asapAllowed: true
+                    message: Open for pickup
+                  isOpenNow: true
+                  asapAllowed: true
+                  categories: []
+                  menu: []
+  /restaurants/{restaurantId}/menu:
+    get:
+      tags: [Restaurants]
+      summary: Get a restaurant menu
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Restaurant menu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantMenuResponse'
+              example:
+                restaurant:
+                  id: 12
+                  name: Pik Thai
+                  cuisine: Thai
+                  location: Fremont, CA
+                  address:
+                    line1: 123 Main St
+                    city: Fremont
+                    state: CA
+                    formatted: Fremont, CA
+                  openHours:
+                    timezone: America/Los_Angeles
+                    schedule: []
+                  pickupAvailability:
+                    isOpenNow: true
+                    asapAllowed: true
+                    message: Open for pickup
+                  isOpenNow: true
+                  asapAllowed: true
+                pickupAvailability:
+                  isOpenNow: true
+                  asapAllowed: true
+                  message: Open for pickup
+                categories: []
+                menu: []
+  /restaurants/{restaurantId}/users:
+    post:
+      tags: [RestaurantUsers]
+      summary: Create a restaurant user
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantUserCreateRequest'
+            example:
+              full_name: Alex Owner
+              email: owner@example.com
+              phone: '+15555550123'
+              password: StrongPassword123!
+              role: owner
+      responses:
+        '201':
+          description: Restaurant user created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantUserEnvelope'
+              example:
+                user:
+                  id: 44
+                  restaurant_id: 12
+                  full_name: Alex Owner
+                  phone: '+15555550123'
+                  email: owner@example.com
+                  role: owner
+                  is_active: true
+                  created_at: '2026-04-24T16:00:00.000Z'
+                  updated_at: '2026-04-24T16:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [RestaurantUsers]
+      summary: List restaurant users
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Restaurant users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantUsersEnvelope'
+              example:
+                users:
+                  - id: 44
+                    restaurant_id: 12
+                    full_name: Alex Owner
+                    phone: '+15555550123'
+                    email: owner@example.com
+                    role: owner
+                    is_active: true
+                    created_at: '2026-04-24T16:00:00.000Z'
+                    updated_at: '2026-04-24T16:00:00.000Z'
+  /restaurant-users/{userId}:
+    put:
+      tags: [RestaurantUsers]
+      summary: Update a restaurant user
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantUserUpdateRequest'
+            example:
+              full_name: Alex Owner
+              email: owner@example.com
+              phone: '+15555550123'
+              role: owner
+      responses:
+        '200':
+          description: Restaurant user updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantUserEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /restaurant-users/{userId}/deactivate:
+    patch:
+      tags: [RestaurantUsers]
+      summary: Deactivate a restaurant user
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Restaurant user deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantUserEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dashboard/restaurants/{restaurantId}/menu:
+    get:
+      tags: [Menu]
+      summary: List menu items for a restaurant
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Menu items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemsResponse'
+    post:
+      tags: [MenuItems]
+      summary: Create a menu item
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemCreateRequest'
+            example:
+              name: Samosa
+              category_id: 31
+              description: Crispy pastry
+              price: 8
+              is_vegetarian: true
+              is_vegan: false
+              is_available: true
+      responses:
+        '201':
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /dashboard/restaurants/{restaurantId}/menu/categories:
+    get:
+      tags: [Menu]
+      summary: List menu categories
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Menu categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+    post:
+      tags: [Menu]
+      summary: Create a menu category
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuCategoryCreateRequest'
+            example:
+              name: Appetizers
+              display_order: 1
+              is_active: true
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryEnvelope'
+  /dashboard/restaurants/{restaurantId}/menu/categories/{categoryId}:
+    put:
+      tags: [Menu]
+      summary: Update a menu category
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - $ref: '#/components/parameters/CategoryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuCategoryUpdateRequest'
+            example:
+              name: Appetizers
+              display_order: 2
+              is_active: true
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /dashboard/restaurants/{restaurantId}/menu/export:
+    get:
+      tags: [Menu]
+      summary: Export menu data
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Menu export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuExportResponse'
+  /dashboard/restaurants/{restaurantId}/menu/import:
+    post:
+      tags: [Menu]
+      summary: Import menu data
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuImportRequest'
+          text/csv:
+            schema:
+              type: string
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuImportResponse'
+  /dashboard/menu-items/{menuItemId}:
+    put:
+      tags: [MenuItems]
+      summary: Update a menu item
+      parameters:
+        - $ref: '#/components/parameters/MenuItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemUpdateRequest'
+      responses:
+        '200':
+          description: Menu item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemEnvelope'
+    delete:
+      tags: [MenuItems]
+      summary: Delete a menu item
+      parameters:
+        - $ref: '#/components/parameters/MenuItemId'
+      responses:
+        '200':
+          description: Menu item deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+  /dashboard/menu-items/{menuItemId}/availability:
+    patch:
+      tags: [MenuItems]
+      summary: Toggle menu item availability
+      parameters:
+        - $ref: '#/components/parameters/MenuItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemAvailabilityRequest'
+      responses:
+        '200':
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemEnvelope'
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+  parameters:
+    RestaurantId:
+      name: restaurantId
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 12
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 31
+    MenuItemId:
+      name: menuItemId
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 101
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 44
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required: [success]
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+    RestaurantListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/Restaurant'
+    RestaurantEnvelope:
+      type: object
+      properties:
+        restaurant:
+          $ref: '#/components/schemas/Restaurant'
+    RestaurantCreateRequest:
+      type: object
+      required: [name, cuisine_type]
+      properties:
+        name:
+          type: string
+        cuisine_type:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        address_line1:
+          type: string
+        slug:
+          type: string
+    RestaurantMenuResponse:
+      type: object
+      properties:
+        restaurant:
+          $ref: '#/components/schemas/Restaurant'
+        pickupAvailability:
+          $ref: '#/components/schemas/PickupAvailability'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuCategory'
+        menu:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        cuisine:
+          type: string
+        location:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        openHours:
+          type: object
+        pickupAvailability:
+          $ref: '#/components/schemas/PickupAvailability'
+        isOpenNow:
+          type: boolean
+        asapAllowed:
+          type: boolean
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuCategory'
+        menu:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        formatted:
+          type: string
+    PickupAvailability:
+      type: object
+      properties:
+        isOpenNow:
+          type: boolean
+        asapAllowed:
+          type: boolean
+        message:
+          type: string
+    RestaurantUserCreateRequest:
+      type: object
+      required: [full_name, email, password]
+      properties:
+        full_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          type: string
+          enum: [staff, owner]
+    RestaurantUserUpdateRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          type: string
+          enum: [staff, owner]
+    RestaurantUserEnvelope:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/RestaurantUser'
+    RestaurantUsersEnvelope:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/RestaurantUser'
+    RestaurantUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        restaurant_id:
+          type: integer
+        full_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    MenuCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+        restaurant_id:
+          type: integer
+        name:
+          type: string
+        display_order:
+          type: integer
+        is_active:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+    CategoryListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuCategory'
+    CategoryEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        category:
+          $ref: '#/components/schemas/MenuCategory'
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        category_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        is_vegetarian:
+          type: boolean
+        is_vegan:
+          type: boolean
+        is_available:
+          type: boolean
+        display_order:
+          type: integer
+    MenuItemCreateRequest:
+      type: object
+      required: [name, price]
+      properties:
+        name:
+          type: string
+        category_id:
+          type: integer
+        description:
+          type: string
+        price:
+          type: number
+        is_vegetarian:
+          type: boolean
+        is_vegan:
+          type: boolean
+        is_available:
+          type: boolean
+    MenuItemUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category_id:
+          type: integer
+        description:
+          type: string
+        price:
+          type: number
+        is_vegetarian:
+          type: boolean
+        is_vegan:
+          type: boolean
+        is_available:
+          type: boolean
+        display_order:
+          type: integer
+    MenuItemAvailabilityRequest:
+      type: object
+      required: [is_available]
+      properties:
+        is_available:
+          type: boolean
+    MenuItemEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        item:
+          $ref: '#/components/schemas/MenuItem'
+    MenuItemsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+    MenuCategoryCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        display_order:
+          type: integer
+        is_active:
+          type: boolean
+    MenuCategoryUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        display_order:
+          type: integer
+        is_active:
+          type: boolean
+    MenuImportRequest:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuCategory'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+        uncategorized_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+    MenuExportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        restaurant:
+          $ref: '#/components/schemas/Restaurant'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuCategory'
+        uncategorized_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MenuItem'
+    MenuImportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summary:
+          type: object
+          properties:
+            categoriesCreated:
+              type: integer
+            categoriesUpdated:
+              type: integer
+            itemsCreated:
+              type: integer
+            itemsUpdated:
+              type: integer

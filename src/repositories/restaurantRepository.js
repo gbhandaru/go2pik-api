@@ -129,6 +129,31 @@ async function fetchRestaurantsFromDb({ restaurantId, city } = {}) {
   return groupRestaurants(rows);
 }
 
+async function createRestaurantRecord({
+  slug,
+  name,
+  cuisineType,
+  city,
+  state,
+  addressLine1,
+} = {}) {
+  const query = `
+    INSERT INTO restaurants (
+      slug,
+      name,
+      cuisine_type,
+      city,
+      state,
+      address_line1
+    )
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *;
+  `;
+  const values = [slug, name, cuisineType, city || null, state || null, addressLine1 || null];
+  const { rows } = await pool.query(query, values);
+  return rows[0] || null;
+}
+
 function convertFallbackRestaurant(rest) {
   const items = (rest.menu || []).map((item, idx) => ({
     id: item.id || item.sku || idx,
@@ -175,6 +200,7 @@ function getFallbackRestaurantById(restaurantId) {
 }
 
 module.exports = {
+  createRestaurantRecord,
   fetchRestaurantsFromDb,
   getFallbackRestaurants,
   getFallbackRestaurantById,
