@@ -1,5 +1,15 @@
 const asyncHandler = require('../utils/asyncHandler');
-const { getAllRestaurants, getRestaurantById, decorateRestaurant } = require('../services/restaurantService');
+const {
+  createRestaurant,
+  getAllRestaurants,
+  getRestaurantById,
+  decorateRestaurant,
+} = require('../services/restaurantService');
+
+const createRestaurantRecord = asyncHandler(async (req, res) => {
+  const restaurant = await createRestaurant(req.body || {});
+  res.status(201).json({ restaurant });
+});
 
 const listRestaurants = asyncHandler(async (req, res) => {
   const { city } = req.query;
@@ -28,6 +38,7 @@ const getRestaurantMenu = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  createRestaurant: createRestaurantRecord,
   listRestaurants,
   getRestaurantMenu,
 };

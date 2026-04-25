@@ -1,22 +1,20 @@
 const express = require('express');
 const path = require('path');
-
+const requireAdminDocsAuth = require('../middlewares/adminDocsAuth');
 
 const router = express.Router();
-const specPath = path.resolve(__dirname, '../../docs/openapi-menu.yaml');
-const specUrl = '/api/docs/menu/openapi.yaml';
+const menuSpecPath = path.resolve(__dirname, '../../docs/openapi-menu.yaml');
+const adminSpecPath = path.resolve(__dirname, '../../docs/openapi-admin.yaml');
+const menuSpecUrl = '/api/docs/menu/openapi.yaml';
+const adminSpecUrl = '/api/docs/admin/openapi.yaml';
 
-router.get('/menu/openapi.yaml', (req, res) => {
-  res.sendFile(specPath);
-});
-
-router.get('/menu', (req, res) => {
-  res.type('html').send(`<!doctype html>
+function renderSwaggerPage({ title, specUrl }) {
+  return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Go2Pik API Docs - Menu</title>
+    <title>${title}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
     <style>
       body { margin: 0; background: #f4f1ea; font-family: Arial, sans-serif; }
@@ -39,7 +37,33 @@ router.get('/menu', (req, res) => {
       };
     </script>
   </body>
-</html>`);
+</html>`;
+}
+
+router.get('/menu/openapi.yaml', (req, res) => {
+  res.sendFile(menuSpecPath);
+});
+
+router.get('/menu', (req, res) => {
+  res.type('html').send(
+    renderSwaggerPage({
+      title: 'Go2Pik API Docs - Menu',
+      specUrl: menuSpecUrl,
+    })
+  );
+});
+
+router.get('/admin/openapi.yaml', requireAdminDocsAuth, (req, res) => {
+  res.sendFile(adminSpecPath);
+});
+
+router.get('/admin', requireAdminDocsAuth, (req, res) => {
+  res.type('html').send(
+    renderSwaggerPage({
+      title: 'Go2Pik API Docs - Admin',
+      specUrl: adminSpecUrl,
+    })
+  );
 });
 
 module.exports = router;

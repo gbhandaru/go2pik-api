@@ -42,6 +42,8 @@ NOTIFICATION_TIMEZONE=America/New_York
 SENDGRID_API_KEY=Email Provider API key (if using SendGrid)
 SENDGRID_FROM_EMAIL=orders@go2pik.com
 SENDGRID_FROM_NAME=Go2Pik
+ADMIN_DOCS_USERNAME=admin
+ADMIN_DOCS_PASSWORD=change-this-secret
 ```
 
 If `CORS_ORIGINS` is absent the server falls back to the built‑in allowlist:
@@ -70,6 +72,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/auth/customers/signup|login|logout|refresh`, `GET /api/auth/customers/me` – customer auth
 - `PATCH /api/customers/me/phone` – authenticated customer phone update
 - `POST /api/auth/restaurant-users/login|logout|refresh`, `GET /api/auth/restaurant-users/me` – restaurant staff auth
+- `POST /api/restaurants` – admin-only restaurant creation
 - `POST /api/customers`, `GET/PUT /api/customers/:id`, `GET /api/customers/:id/orders`, `PATCH /api/customers/:id/deactivate`
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
@@ -138,6 +141,9 @@ curl -X POST "http://localhost:3000/api/dashboard/restaurants/12/menu/import" \
 ```
 - OpenAPI spec for the menu endpoints: [`docs/openapi-menu.yaml`](/Users/Krprasa/Gap-Repos/Personal/go2pik-api/docs/openapi-menu.yaml)
 - Swagger UI for the menu spec: `GET /api/docs/menu`
+- OpenAPI spec for admin restaurant onboarding and restaurant-user management: [`docs/openapi-admin.yaml`](/Users/Krprasa/Gap-Repos/Personal/go2pik-api/docs/openapi-admin.yaml)
+- Admin-only Swagger UI: `GET /api/docs/admin`
+- Admin docs access is protected with HTTP Basic Auth using `ADMIN_DOCS_USERNAME` and `ADMIN_DOCS_PASSWORD`
 
 All endpoints expect/return JSON and rely on the Postgres schema from the food-order-app project. Fallback restaurant/menu data lives in `data/restaurants.json` to keep the app responsive when DB data is missing.
 

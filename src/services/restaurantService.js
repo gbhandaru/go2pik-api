@@ -2,6 +2,7 @@ const ApiError = require('../utils/errors');
 const config = require('../config/env');
 const { buildPickupAvailability, normalizePickupHours } = require('../utils/pickupHours');
 const {
+  createRestaurantRecord,
   fetchRestaurantsFromDb,
   getFallbackRestaurants,
   getFallbackRestaurantById,
@@ -41,6 +42,14 @@ function decorateRestaurant(restaurant) {
     categories,
     menu: (restaurant.menu || []).map(decorateMenuItem),
   };
+}
+
+function normalizeSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 async function getAllRestaurants(filter = {}) {
@@ -86,7 +95,47 @@ async function fetchRestaurantById(restaurantId) {
   }
 }
 
+async function createRestaurant(payload = {}) {
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  if (!name) {
+    throw ApiError.badRequest('name is required');
+  }
+  const cuisineType = typeof payload.cuisine_type === 'string'
+    ? payload.cuisine_type.trim()
+    : typeof payload.cuisine === 'string'
+      ? payload.cuisine.trim()
+      : '';
+  if (!cuisineType) {
+    throw ApiError.badRequest('cuisine_type is required');
+  }
+  const slug = normalizeSlug(payload.slug || name);
+  if (!slug) {
+    throw ApiError.badRequest('slug could not be derived from name');
+  }
+  try {
+    const row = await createRestaurantRecord({
+      slug,
+      name,
+      cuisineType,
+      city: payload.city || null,
+      state: payload.state || null,
+      addressLine1: payload.address_line1 || payload.addressLine1 || null,
+    });
+    if (!row) {
+      throw new Error('Failed to create restaurant');
+    }
+    const restaurant = await fetchRestaurantById(row.id);
+    return decorateRestaurant(restaurant);
+  } catch (error) {
+    if (error.code === '23505') {
+      throw ApiError.conflict('Restaurant with this slug already exists');
+    }
+    throw error;
+  }
+}
+
 module.exports = {
+  createRestaurant,
   getAllRestaurants,
   getRestaurantById: async (id) => decorateRestaurant(await fetchRestaurantById(id)),
   decorateRestaurant,

@@ -32,7 +32,7 @@ function array(value) {
     .filter(Boolean);
 }
 
-const DEFAULT_SENDGRID_API_KEY = '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';
+const DEFAULT_SENDGRID_API_KEY = '';
 const DEFAULT_SENDGRID_FROM_EMAIL = 'orders@go2pik.com';
 const DEFAULT_SENDGRID_FROM_NAME = 'Go2Pik';
 
@@ -109,6 +109,10 @@ const config = {
       process.env.PUBLIC_ORDER_REVIEW_TOKEN_TTL_SECONDS,
       60 * 60 * 24 * 7
     ),
+  },
+  docs: {
+    adminUsername: process.env.ADMIN_DOCS_USERNAME || '',
+    adminPassword: process.env.ADMIN_DOCS_PASSWORD || '',
   },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
