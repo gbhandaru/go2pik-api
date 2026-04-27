@@ -72,6 +72,12 @@ function normalizeMenuItems(items, restaurant) {
 function enrichOrderRow(row) {
   if (!row) return row;
   const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
+  const grossTotal = Number(row.total_amount);
+  const discountAmount = Number(row.discount_amount || 0);
+  const finalAmount =
+    row.final_amount !== null && row.final_amount !== undefined
+      ? Number(row.final_amount)
+      : grossTotal;
   const items = rawItems.map((item) => ({
     id: item.id,
     ...item,
@@ -103,15 +109,13 @@ function enrichOrderRow(row) {
     items,
     subtotal: Number(row.subtotal),
     tax: Number(row.tax_amount),
-    total: Number(row.total_amount),
+    total: finalAmount,
+    grossTotal,
     promotionId: row.promotion_id || null,
     promotionCode: row.promo_code || null,
     promoCode: row.promo_code || null,
-    discountAmount: Number(row.discount_amount || 0),
-    finalAmount:
-      row.final_amount !== null && row.final_amount !== undefined
-        ? Number(row.final_amount)
-        : Number(row.total_amount || 0),
+    discountAmount,
+    finalAmount,
     status: row.status,
     paymentMode: row.payment_mode,
     paymentStatus: row.payment_status,
@@ -241,7 +245,7 @@ async function prepareOrderDraft(payload = {}) {
   const derivedEmail = deriveEmailFromCustomer(customer);
   const rawCandidateId = customer.id || rootCustomerId || customer.customerId;
   const candidateCustomerId = rawCandidateId ? Number(rawCandidateId) : null;
-  const normalizedPromoCode = normalizePromoCode(payload.promoCode);
+  const normalizedPromoCode = normalizePromoCode(payload.promoCode || payload.promotionCode);
   const normalizedCustomer = {
     ...customer,
     email: derivedEmail,

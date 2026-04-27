@@ -3,14 +3,26 @@ const ApiError = require('../utils/errors');
 const { validatePromotion } = require('../services/promotions.service');
 
 const validate = asyncHandler(async (req, res) => {
-  const { promoCode, customerPhone, orderAmount, restaurantId } = req.body || {};
+  const {
+    promoCode,
+    promotionCode,
+    customerPhone,
+    orderAmount,
+    restaurantId,
+  } = req.body || {};
+  const normalizedPromoCode = promoCode || promotionCode;
 
-  if (promoCode === undefined || customerPhone === undefined || orderAmount === undefined || restaurantId === undefined) {
+  if (
+    normalizedPromoCode === undefined ||
+    customerPhone === undefined ||
+    orderAmount === undefined ||
+    restaurantId === undefined
+  ) {
     throw ApiError.badRequest('promoCode, customerPhone, orderAmount, and restaurantId are required');
   }
 
   const result = await validatePromotion({
-    promoCode,
+    promoCode: normalizedPromoCode,
     customerPhone,
     orderAmount,
     restaurantId,
