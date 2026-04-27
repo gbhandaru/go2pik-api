@@ -1,6 +1,11 @@
 const pool = require('../config/db');
 const ApiError = require('../utils/errors');
 const { normalizePhoneNumber } = require('../utils/phone');
+const {
+  findPromotionById,
+  getPromotionUsageCounts,
+  insertPromotionUsage,
+} = require('./promotions.repository');
 
 function normalizeIdList(values = []) {
   return Array.from(
@@ -18,10 +23,17 @@ function normalizeIdList(values = []) {
   );
 }
 
-async function createOrderRecord({ restaurantId, customer, items, totals }) {
+async function createOrderRecord({ restaurantId, customer, items, totals, promotion = null }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const normalizedCustomerPhone = normalizePhoneNumber(customer.phone || '');
+    const appliedFinalAmount = promotion?.finalAmount !== undefined && promotion?.finalAmount !== null
+      ? Number(promotion.finalAmount)
+      : totals.total;
+    const appliedDiscountAmount = promotion?.discountAmount !== undefined && promotion?.discountAmount !== null
+      ? Number(promotion.discountAmount)
+      : 0;
     const params = [
       Number(restaurantId),
       customer.name || 'Guest',
@@ -31,7 +43,11 @@ async function createOrderRecord({ restaurantId, customer, items, totals }) {
       customer.notes || null,
       totals.subtotal,
       totals.tax,
-      totals.total,
+      appliedFinalAmount,
+      promotion?.promotionId || null,
+      promotion?.promoCode || null,
+      appliedDiscountAmount,
+      appliedFinalAmount,
       customer.paymentMode || 'pay_at_restaurant',
       'unpaid',
       'new',
@@ -57,6 +73,10 @@ async function createOrderRecord({ restaurantId, customer, items, totals }) {
         subtotal,
         tax_amount,
         total_amount,
+        promotion_id,
+        promo_code,
+        discount_amount,
+        final_amount,
         payment_mode,
         payment_status,
         status
@@ -74,12 +94,46 @@ async function createOrderRecord({ restaurantId, customer, items, totals }) {
         $9,
         $10,
         $11,
-        $12
+        $12,
+        $13,
+        $14,
+        $15,
+        $16,
+        $17
       FROM next_sequence
       RETURNING id, order_number;
     `;
     const { rows } = await client.query(query, params);
     const orderId = rows[0].id;
+    if (promotion?.promotionId) {
+      const lockedPromotion = await findPromotionById(promotion.promotionId, client, { forUpdate: true });
+      if (!lockedPromotion) {
+        throw ApiError.badRequest('Promo code is invalid or already used');
+      }
+      if (!lockedPromotion.isActive) {
+        throw ApiError.badRequest('Promo code is invalid or already used');
+      }
+      const usageCounts = await getPromotionUsageCounts(lockedPromotion.id, normalizedCustomerPhone, client);
+      if (usageCounts.phoneUsage > 0) {
+        throw ApiError.conflict('Promo code already used for this phone number');
+      }
+      if (usageCounts.totalUsage >= lockedPromotion.usageLimitTotal) {
+        throw ApiError.conflict('Promo code usage limit has been reached');
+      }
+      await insertPromotionUsage(client, {
+        promotionId: lockedPromotion.id,
+        customerPhone: normalizedCustomerPhone,
+        orderId,
+      });
+      console.log('[orderRepository] promotion applied during order creation', {
+        orderId,
+        promotionId: lockedPromotion.id,
+        promoCode: lockedPromotion.promoCode,
+        customerPhone: normalizedCustomerPhone,
+        discountAmount: appliedDiscountAmount,
+        finalAmount: appliedFinalAmount,
+      });
+    }
     const insertItem = `
       INSERT INTO order_items (order_id, menu_item_id, item_name, unit_price, quantity, line_total, special_instructions)
       VALUES ($1, $2, $3, $4, $5, $6, $7);
@@ -118,6 +172,10 @@ async function getOrderById(orderId) {
       o.subtotal,
       o.tax_amount,
       o.total_amount,
+      o.promotion_id,
+      o.promo_code,
+      o.discount_amount,
+      o.final_amount,
       o.status,
       o.payment_mode,
       o.payment_status,
@@ -176,6 +234,10 @@ async function getOrderByOrderNumber(orderNumber) {
       o.subtotal,
       o.tax_amount,
       o.total_amount,
+      o.promotion_id,
+      o.promo_code,
+      o.discount_amount,
+      o.final_amount,
       o.status,
       o.payment_mode,
       o.payment_status,
@@ -287,6 +349,10 @@ async function listOrders({
       o.subtotal,
       o.tax_amount,
       o.total_amount,
+      o.promotion_id,
+      o.promo_code,
+      o.discount_amount,
+      o.final_amount,
       o.status,
       o.payment_mode,
       o.payment_status,
@@ -576,6 +642,7 @@ async function partiallyAcceptOrder(orderId, {
       SET subtotal = $2,
           tax_amount = $3,
           total_amount = $4,
+          final_amount = $4,
           status = 'accepted',
           accepted_at = COALESCE(accepted_at, now()),
           acceptance_mode = 'partial',

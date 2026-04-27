@@ -3,6 +3,7 @@ const config = require('../config/env');
 const { runOrderAutomation } = require('../utils/automation');
 const { formatUsd } = require('../utils/currency');
 const { normalizePhoneNumber } = require('../utils/phone');
+const { normalizePromoCode, validatePromotion } = require('./promotions.service');
 const { getRestaurantById } = require('./restaurantService');
 const { findCustomerById } = require('./customerService');
 const { sendOrderConfirmationEmail } = require('./notificationService');
@@ -103,6 +104,13 @@ function enrichOrderRow(row) {
     subtotal: Number(row.subtotal),
     tax: Number(row.tax_amount),
     total: Number(row.total_amount),
+    promotionId: row.promotion_id || null,
+    promoCode: row.promo_code || null,
+    discountAmount: Number(row.discount_amount || 0),
+    finalAmount:
+      row.final_amount !== null && row.final_amount !== undefined
+        ? Number(row.final_amount)
+        : Number(row.total_amount || 0),
     status: row.status,
     paymentMode: row.payment_mode,
     paymentStatus: row.payment_status,
@@ -128,7 +136,9 @@ function formatOrderAmounts(order) {
     })),
     subtotalDisplay: formatUsd(order.subtotal ?? order.total),
     taxDisplay: formatUsd(order.tax ?? 0),
-    totalDisplay: formatUsd(order.total),
+    totalDisplay: formatUsd(order.finalAmount ?? order.total),
+    discountAmountDisplay: formatUsd(order.discountAmount ?? 0),
+    finalAmountDisplay: formatUsd(order.finalAmount ?? order.total),
   };
 }
 
@@ -136,11 +146,33 @@ async function createOrder(payload = {}) {
   const draft = await prepareOrderDraft(payload);
   const { restaurant, customer, items, totals } = draft;
   const { subtotal, tax, total } = totals;
+  let promotion = null;
+  if (draft.promoCode) {
+    const validation = await validatePromotion({
+      promoCode: draft.promoCode,
+      customerPhone: customer.phone,
+      orderAmount: total,
+      restaurantId: restaurant.id,
+    });
+    if (!validation.valid) {
+      throw ApiError.badRequest(validation.message || 'Promo code is invalid or already used');
+    }
+    promotion = validation;
+  }
   const orderId = await createOrderRecord({
     restaurantId: restaurant.id,
     customer,
     items,
     totals,
+    promotion: promotion
+      ? {
+          promotionId: promotion.promotionId,
+          promoCode: promotion.promoCode,
+          discountAmount: promotion.discountAmount,
+          finalAmount: promotion.finalAmount,
+          customerPhone: promotion.customerPhone || customer.phone || null,
+        }
+      : null,
   });
   const automationResult = await runOrderAutomation({
     restaurant,
@@ -208,6 +240,7 @@ async function prepareOrderDraft(payload = {}) {
   const derivedEmail = deriveEmailFromCustomer(customer);
   const rawCandidateId = customer.id || rootCustomerId || customer.customerId;
   const candidateCustomerId = rawCandidateId ? Number(rawCandidateId) : null;
+  const normalizedPromoCode = normalizePromoCode(payload.promoCode);
   const normalizedCustomer = {
     ...customer,
     email: derivedEmail,
@@ -251,6 +284,7 @@ async function prepareOrderDraft(payload = {}) {
     restaurantId: restaurant.id,
     restaurant,
     customer: normalizedCustomer,
+    promoCode: normalizedPromoCode || null,
     customerId: candidateCustomerId,
     items: normalizedItems,
     totals: { subtotal, tax, total },
