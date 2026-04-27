@@ -9,6 +9,35 @@ function assertInsertArity(context, targetColumns, valueExpressions) {
   }
 }
 
+let payloadColumnInfoPromise = null;
+
+async function getOrderVerificationPayloadColumnInfo() {
+  if (!payloadColumnInfoPromise) {
+    payloadColumnInfoPromise = pool
+      .query(
+        `
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'order_verifications'
+            AND column_name IN ('order_payload', 'pending_order_payload');
+        `
+      )
+      .then(({ rows }) => {
+        const columns = new Set(rows.map((row) => row.column_name));
+        return {
+          hasOrderPayload: columns.has('order_payload'),
+          hasPendingOrderPayload: columns.has('pending_order_payload'),
+        };
+      })
+      .catch((error) => {
+        payloadColumnInfoPromise = null;
+        throw error;
+      });
+  }
+  return payloadColumnInfoPromise;
+}
+
 function mapVerification(row) {
   if (!row) return null;
   return {
@@ -42,6 +71,7 @@ function normalizePickupType(value) {
 }
 
 async function createVerificationSession(fields) {
+  const payloadColumns = await getOrderVerificationPayloadColumnInfo();
   const targetColumns = [
     'customer_name',
     'phone',
@@ -51,7 +81,6 @@ async function createVerificationSession(fields) {
     'restaurant_id',
     'pickup_type',
     'pickup_time',
-    'order_payload',
     'status',
     'attempt_count',
     'max_attempts',
@@ -59,11 +88,17 @@ async function createVerificationSession(fields) {
     'resend_available_at',
     'verified_at',
   ];
+  if (payloadColumns.hasOrderPayload) {
+    targetColumns.splice(8, 0, 'order_payload');
+  }
+  if (payloadColumns.hasPendingOrderPayload) {
+    targetColumns.splice(targetColumns.indexOf('status'), 0, 'pending_order_payload');
+  }
   const query = `
     INSERT INTO order_verifications (
       ${targetColumns.join(', ')}
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    VALUES (${targetColumns.map((_, index) => `$${index + 1}`).join(', ')})
     RETURNING *;
   `;
   const values = [
@@ -75,7 +110,6 @@ async function createVerificationSession(fields) {
     fields.restaurantId,
     normalizePickupType(fields.pickupType),
     fields.pickupTime || null,
-    JSON.stringify(fields.pendingOrderPayload || {}),
     fields.status || 'pending',
     fields.attemptCount || 0,
     fields.maxAttempts || 0,
@@ -83,6 +117,13 @@ async function createVerificationSession(fields) {
     fields.resendAvailableAt,
     fields.verifiedAt || null,
   ];
+  const payloadValue = JSON.stringify(fields.pendingOrderPayload || {});
+  if (payloadColumns.hasOrderPayload) {
+    values.splice(8, 0, payloadValue);
+  }
+  if (payloadColumns.hasPendingOrderPayload) {
+    values.splice(values.indexOf(fields.status || 'pending'), 0, payloadValue);
+  }
   assertInsertArity('Order verification session', targetColumns, values);
   try {
     const { rows } = await pool.query(query, values);
@@ -113,11 +154,18 @@ async function getVerificationSessionById(id) {
 async function updateVerificationSession(id, fields = {}) {
   const updates = [];
   const values = [];
+  const payloadColumns = await getOrderVerificationPayloadColumnInfo();
   const normalized = {
     ...fields,
   };
   if (normalized.pendingOrderPayload !== undefined) {
-    normalized.order_payload = JSON.stringify(normalized.pendingOrderPayload || {});
+    const payloadValue = JSON.stringify(normalized.pendingOrderPayload || {});
+    if (payloadColumns.hasOrderPayload) {
+      normalized.order_payload = payloadValue;
+    }
+    if (payloadColumns.hasPendingOrderPayload) {
+      normalized.pending_order_payload = payloadValue;
+    }
     delete normalized.pendingOrderPayload;
   }
   Object.entries(normalized).forEach(([key, value]) => {
