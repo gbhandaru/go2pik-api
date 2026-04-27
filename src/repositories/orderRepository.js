@@ -23,6 +23,14 @@ function normalizeIdList(values = []) {
   );
 }
 
+function assertInsertArity(context, targetColumns, valueExpressions) {
+  if (targetColumns.length !== valueExpressions.length) {
+    throw ApiError.badRequest(
+      `${context} insert configuration is invalid: expected ${targetColumns.length} values, received ${valueExpressions.length}`
+    );
+  }
+}
+
 async function createOrderRecord({ restaurantId, customer, items, totals, promotion = null }) {
   const client = await pool.connect();
   try {
@@ -52,6 +60,45 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
       'unpaid',
       'new',
     ];
+    const orderColumns = [
+      'restaurant_id',
+      'order_number',
+      'customer_name',
+      'customer_phone',
+      'customer_email',
+      'pickup_time',
+      'notes',
+      'subtotal',
+      'tax_amount',
+      'total_amount',
+      'promotion_id',
+      'promo_code',
+      'discount_amount',
+      'final_amount',
+      'payment_mode',
+      'payment_status',
+      'status',
+    ];
+    const orderSelectExpressions = [
+      '$1',
+      "'R' || $1::text || '-' || LPAD(next_sequence.last_order_sequence::text, 5, '0')",
+      '$2',
+      '$3',
+      '$4',
+      '$5',
+      '$6',
+      '$7',
+      '$8',
+      '$9',
+      '$10',
+      '$11',
+      '$12',
+      '$13',
+      '$14',
+      '$15',
+      '$16',
+    ];
+    assertInsertArity('Order', orderColumns, orderSelectExpressions);
     const query = `
       WITH next_sequence AS (
         INSERT INTO restaurant_order_counters (restaurant_id, last_order_sequence)
@@ -63,43 +110,10 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
         RETURNING last_order_sequence
       )
       INSERT INTO orders (
-        restaurant_id,
-        order_number,
-        customer_name,
-        customer_phone,
-        customer_email,
-        pickup_time,
-        notes,
-        subtotal,
-        tax_amount,
-        total_amount,
-        promotion_id,
-        promo_code,
-        discount_amount,
-        final_amount,
-        payment_mode,
-        payment_status,
-        status
+        ${orderColumns.join(', ')}
       )
       SELECT
-        $1,
-        'R' || $1::text || '-' || LPAD(next_sequence.last_order_sequence::text, 5, '0'),
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        $12,
-        $13,
-        $14,
-        $15,
-        $16,
-        $17
+        ${orderSelectExpressions.join(',\n        ')}
       FROM next_sequence
       RETURNING id, order_number;
     `;
@@ -153,6 +167,13 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
     return orderId;
   } catch (error) {
     await client.query('ROLLBACK');
+    if (
+      error?.code === '42601' &&
+      typeof error?.message === 'string' &&
+      error.message.toLowerCase().includes('insert has more expressions than target columns')
+    ) {
+      throw ApiError.badRequest('Order insert configuration is invalid. Please contact support.');
+    }
     throw error;
   } finally {
     client.release();

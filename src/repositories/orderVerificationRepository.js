@@ -1,4 +1,13 @@
 const pool = require('../config/db');
+const ApiError = require('../utils/errors');
+
+function assertInsertArity(context, targetColumns, valueExpressions) {
+  if (targetColumns.length !== valueExpressions.length) {
+    throw ApiError.badRequest(
+      `${context} insert configuration is invalid: expected ${targetColumns.length} values, received ${valueExpressions.length}`
+    );
+  }
+}
 
 function mapVerification(row) {
   if (!row) return null;
@@ -12,7 +21,7 @@ function mapVerification(row) {
     restaurantId: row.restaurant_id,
     pickupType: row.pickup_type,
     pickupTime: row.pickup_time,
-    pendingOrderPayload: row.pending_order_payload,
+    pendingOrderPayload: row.order_payload ?? row.pending_order_payload,
     status: row.status,
     attemptCount: Number(row.attempt_count || 0),
     maxAttempts: Number(row.max_attempts || 0),
@@ -33,23 +42,26 @@ function normalizePickupType(value) {
 }
 
 async function createVerificationSession(fields) {
+  const targetColumns = [
+    'customer_name',
+    'phone',
+    'masked_phone',
+    'customer_phone',
+    'customer_email',
+    'restaurant_id',
+    'pickup_type',
+    'pickup_time',
+    'order_payload',
+    'status',
+    'attempt_count',
+    'max_attempts',
+    'expires_at',
+    'resend_available_at',
+    'verified_at',
+  ];
   const query = `
     INSERT INTO order_verifications (
-      customer_name,
-      phone,
-      masked_phone,
-      customer_phone,
-      customer_email,
-      restaurant_id,
-      pickup_type,
-      pickup_time,
-      pending_order_payload,
-      status,
-      attempt_count,
-      max_attempts,
-      expires_at,
-      resend_available_at,
-      verified_at
+      ${targetColumns.join(', ')}
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     RETURNING *;
@@ -71,8 +83,20 @@ async function createVerificationSession(fields) {
     fields.resendAvailableAt,
     fields.verifiedAt || null,
   ];
-  const { rows } = await pool.query(query, values);
-  return mapVerification(rows[0]);
+  assertInsertArity('Order verification session', targetColumns, values);
+  try {
+    const { rows } = await pool.query(query, values);
+    return mapVerification(rows[0]);
+  } catch (error) {
+    if (
+      error?.code === '42601' &&
+      typeof error?.message === 'string' &&
+      error.message.toLowerCase().includes('insert has more expressions than target columns')
+    ) {
+      throw ApiError.badRequest('Order verification insert configuration is invalid. Please contact support.');
+    }
+    throw error;
+  }
 }
 
 async function getVerificationSessionById(id) {
@@ -93,7 +117,7 @@ async function updateVerificationSession(id, fields = {}) {
     ...fields,
   };
   if (normalized.pendingOrderPayload !== undefined) {
-    normalized.pending_order_payload = JSON.stringify(normalized.pendingOrderPayload || {});
+    normalized.order_payload = JSON.stringify(normalized.pendingOrderPayload || {});
     delete normalized.pendingOrderPayload;
   }
   Object.entries(normalized).forEach(([key, value]) => {
