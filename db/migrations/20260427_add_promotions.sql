@@ -1,7 +1,7 @@
 -- Promotions support for launch promo validation and order-level usage tracking.
 CREATE TABLE IF NOT EXISTS promotions (
   id BIGSERIAL PRIMARY KEY,
-  promo_code TEXT NOT NULL,
+  code TEXT NOT NULL,
   discount_type TEXT NOT NULL DEFAULT 'FLAT',
   discount_value NUMERIC(10,2) NOT NULL DEFAULT 0,
   max_discount_amount NUMERIC(10,2),
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS promotions (
 );
 
 ALTER TABLE promotions
-  ADD COLUMN IF NOT EXISTS promo_code TEXT,
+  ADD COLUMN IF NOT EXISTS code TEXT,
   ADD COLUMN IF NOT EXISTS discount_type TEXT NOT NULL DEFAULT 'FLAT',
   ADD COLUMN IF NOT EXISTS discount_value NUMERIC(10,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS max_discount_amount NUMERIC(10,2),
@@ -57,8 +57,8 @@ BEGIN
   END IF;
 END $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_promotions_promo_code_upper
-  ON promotions (UPPER(promo_code));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_promotions_code_upper
+  ON promotions (UPPER(code));
 
 CREATE INDEX IF NOT EXISTS idx_promotions_active_dates
   ON promotions (is_active, start_date, end_date);
@@ -72,10 +72,10 @@ CREATE TABLE IF NOT EXISTS promotion_usage (
 );
 
 ALTER TABLE promotion_usage
-  ADD COLUMN IF NOT EXISTS promotion_id BIGINT NOT NULL,
-  ADD COLUMN IF NOT EXISTS customer_phone TEXT NOT NULL,
-  ADD COLUMN IF NOT EXISTS order_id BIGINT NOT NULL,
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+  ADD COLUMN IF NOT EXISTS promotion_id BIGINT,
+  ADD COLUMN IF NOT EXISTS customer_phone TEXT,
+  ADD COLUMN IF NOT EXISTS order_id BIGINT,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 
 DO $$
 BEGIN

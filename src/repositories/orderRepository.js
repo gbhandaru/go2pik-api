@@ -45,7 +45,7 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
       totals.tax,
       appliedFinalAmount,
       promotion?.promotionId || null,
-      promotion?.promoCode || null,
+      promotion?.promotionCode || null,
       appliedDiscountAmount,
       appliedFinalAmount,
       customer.paymentMode || 'pay_at_restaurant',
@@ -128,7 +128,7 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
       console.log('[orderRepository] promotion applied during order creation', {
         orderId,
         promotionId: lockedPromotion.id,
-        promoCode: lockedPromotion.promoCode,
+        promotionCode: lockedPromotion.promoCode,
         customerPhone: normalizedCustomerPhone,
         discountAmount: appliedDiscountAmount,
         finalAmount: appliedFinalAmount,
