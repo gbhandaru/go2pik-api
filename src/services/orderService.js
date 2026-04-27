@@ -105,6 +105,7 @@ function enrichOrderRow(row) {
     tax: Number(row.tax_amount),
     total: Number(row.total_amount),
     promotionId: row.promotion_id || null,
+    promotionCode: row.promo_code || null,
     promoCode: row.promo_code || null,
     discountAmount: Number(row.discount_amount || 0),
     finalAmount:
@@ -167,7 +168,7 @@ async function createOrder(payload = {}) {
     promotion: promotion
       ? {
           promotionId: promotion.promotionId,
-          promoCode: promotion.promoCode,
+          promotionCode: promotion.promoCode,
           discountAmount: promotion.discountAmount,
           finalAmount: promotion.finalAmount,
           customerPhone: promotion.customerPhone || customer.phone || null,
