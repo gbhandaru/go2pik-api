@@ -304,26 +304,14 @@ async function confirmOrderVerification(sessionId, code) {
         status: isExhausted ? 'failed' : 'pending',
         attempt_count: nextAttempts,
       });
-      throw ApiError.badRequest('Invalid OTP code');
+      const otpError = ApiError.badRequest('Invalid OTP code');
+      otpError._otpFailure = true;
+      throw otpError;
     }
-    console.log('[orderVerificationService] OTP approved, creating final order', {
-      sessionId: session.id,
-      phone: maskPhoneNumber(session.customerPhone),
-    restaurantId: session.restaurantId,
-  });
-  const order = await createOrder(session.pendingOrderPayload || {});
-    const completed = await updateVerificationSession(session.id, {
-      status: 'consumed',
-      verified_at: new Date(),
-    });
-
-    return {
-      verification: toSessionResponse(completed),
-      order: order.order || order,
-      automation: order.automation || null,
-      notification: order.notification || null,
-    };
   } catch (error) {
+    if (error?._otpFailure) {
+      throw error;
+    }
     if (error?.status && error.status < 500) {
       console.warn('[orderVerificationService] Twilio Verify check failed', {
         sessionId: session.id,
@@ -344,6 +332,30 @@ async function confirmOrderVerification(sessionId, code) {
       throw error;
     }
     await updateVerificationSession(session.id, { status: 'failed' });
+    throw error;
+  }
+
+  console.log('[orderVerificationService] OTP approved, creating final order', {
+    sessionId: session.id,
+    phone: maskPhoneNumber(session.customerPhone),
+    restaurantId: session.restaurantId,
+  });
+
+  try {
+    const order = await createOrder(session.pendingOrderPayload || {});
+    const completed = await updateVerificationSession(session.id, {
+      status: 'consumed',
+      verified_at: new Date(),
+    });
+
+    return {
+      verification: toSessionResponse(completed),
+      order: order.order || order,
+      automation: order.automation || null,
+      notification: order.notification || null,
+    };
+  } catch (error) {
+    await updateVerificationSession(session.id, { status: 'pending' });
     throw error;
   }
 }
