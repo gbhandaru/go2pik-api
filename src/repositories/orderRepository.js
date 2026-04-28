@@ -556,7 +556,7 @@ async function partiallyAcceptOrder(orderId, {
 
     const orderResult = await client.query(
       `
-      SELECT id, restaurant_id, status, acceptance_mode
+      SELECT id, restaurant_id, status, acceptance_mode, promotion_id, discount_amount, final_amount
       FROM orders
       WHERE id = $1
       FOR UPDATE;
@@ -656,6 +656,10 @@ async function partiallyAcceptOrder(orderId, {
     const subtotal = acceptedRows.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
     const taxAmount = Number((subtotal * Number(taxRate || 0)).toFixed(2));
     const totalAmount = Number((subtotal + taxAmount).toFixed(2));
+    const existingDiscountAmount = Number(order.discount_amount || 0);
+    const recalculatedFinalAmount = existingDiscountAmount > 0
+      ? Number(Math.max(totalAmount - existingDiscountAmount, 0).toFixed(2))
+      : totalAmount;
 
     await client.query(
       `
@@ -663,18 +667,18 @@ async function partiallyAcceptOrder(orderId, {
       SET subtotal = $2,
           tax_amount = $3,
           total_amount = $4,
-          final_amount = $4,
+          final_amount = $5,
           status = 'accepted',
           accepted_at = COALESCE(accepted_at, now()),
           acceptance_mode = 'partial',
           customer_action = 'pending',
           customer_action_at = NULL,
           customer_action_note = NULL,
-          kitchen_note = $5,
+          kitchen_note = $6,
           updated_at = now()
       WHERE id = $1;
       `,
-      [orderId, subtotal, taxAmount, totalAmount, note || null]
+      [orderId, subtotal, taxAmount, totalAmount, recalculatedFinalAmount, note || null]
     );
 
     await client.query('COMMIT');
