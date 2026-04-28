@@ -247,7 +247,8 @@ async function prepareOrderDraft(payload = {}) {
   }
   const subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const tax = Number((subtotal * DEFAULT_TAX_RATE).toFixed(2));
-  const total = Number((subtotal + tax).toFixed(2));
+  const grossTotal = Number((subtotal + tax).toFixed(2));
+  const total = subtotal;
   const derivedEmail = deriveEmailFromCustomer(customer);
   const rawCandidateId = customer.id || rootCustomerId || customer.customerId;
   const candidateCustomerId = rawCandidateId ? Number(rawCandidateId) : null;
@@ -298,7 +299,7 @@ async function prepareOrderDraft(payload = {}) {
     promoCode: normalizedPromoCode || null,
     customerId: candidateCustomerId,
     items: normalizedItems,
-    totals: { subtotal, tax, total },
+    totals: { subtotal, tax, grossTotal, total },
     pickupType,
     pickupTime,
     pickupRequest: payload.pickupRequest || null,
