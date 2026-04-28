@@ -126,7 +126,7 @@ async function sendPartialAcceptanceSms(order) {
 function buildOrderEmail(order) {
   const { orderNumber, restaurant = {}, customer = {} } = order;
   const pickupTime = resolvePickupTimeLabel(order);
-  const totalAmount = order.totalDisplay || formatUsd(order.total || 0);
+  const totalAmount = order.finalAmountDisplay || formatUsd(order.finalAmount ?? 0);
   const itemsText = renderItems(order.items || []);
   const subject = `Order ${orderNumber} confirmed at ${restaurant.name || 'Go2Pik'}`;
   const textBody = `Hi ${customer.name || 'there'},\n\n`
