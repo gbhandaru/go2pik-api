@@ -31,6 +31,7 @@ const validate = asyncHandler(async (req, res) => {
   if (!result.valid) {
     res.json({
       valid: false,
+      reasonCode: result.reasonCode || 'PROMO_INVALID',
       discountAmount: 0,
       finalAmount: Number(Number(orderAmount || 0).toFixed(2)),
       message: result.message,
@@ -40,6 +41,7 @@ const validate = asyncHandler(async (req, res) => {
 
   res.json({
     valid: true,
+    reasonCode: null,
     promotionId: result.promotionId,
     promoCode: result.promoCode,
     discountAmount: result.discountAmount,

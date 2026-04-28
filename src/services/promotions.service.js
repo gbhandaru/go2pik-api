@@ -14,6 +14,19 @@ function roundMoney(value) {
   return Number(Number(value || 0).toFixed(2));
 }
 
+function buildInvalidResult(orderAmount, reasonCode = 'PROMO_INVALID', message = 'Promo code is invalid or already used') {
+  const roundedOrderAmount = roundMoney(orderAmount);
+  return {
+    valid: false,
+    reasonCode,
+    promotionId: null,
+    promoCode: null,
+    discountAmount: 0,
+    finalAmount: roundedOrderAmount,
+    message,
+  };
+}
+
 function calculateDiscount(promotion, orderAmount) {
   const amount = roundMoney(orderAmount);
   if (!promotion || !Number.isFinite(amount)) {
@@ -43,18 +56,6 @@ function calculateDiscount(promotion, orderAmount) {
 function formatDiscountMessage(discountAmount) {
   const rounded = roundMoney(discountAmount);
   return `$${rounded.toFixed(2)} discount applied`;
-}
-
-function buildInvalidResult(orderAmount, message = 'Promo code is invalid or already used') {
-  const roundedOrderAmount = roundMoney(orderAmount);
-  return {
-    valid: false,
-    promotionId: null,
-    promoCode: null,
-    discountAmount: 0,
-    finalAmount: roundedOrderAmount,
-    message,
-  };
 }
 
 async function validatePromotion({
@@ -90,7 +91,11 @@ async function validatePromotion({
       promoCode: normalizedPromoCode,
       restaurantId: restaurantIdNumber,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_NOT_FOUND',
+      'Promo code was not found'
+    );
   }
 
   if (!promotion.isActive) {
@@ -98,7 +103,11 @@ async function validatePromotion({
       promotionId: promotion.id,
       promoCode: promotion.promoCode,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_INACTIVE',
+      'Promo code is inactive'
+    );
   }
 
   if (
@@ -112,7 +121,11 @@ async function validatePromotion({
       restaurantId: restaurantIdNumber,
       promotionRestaurantId: promotion.restaurantId,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_RESTAURANT_MISMATCH',
+      'Promo code is not valid for this restaurant'
+    );
   }
 
   const currentTime = now instanceof Date ? now : new Date(now);
@@ -129,7 +142,11 @@ async function validatePromotion({
       endDate: promotion.endDate,
       currentTime: currentTime.toISOString(),
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_OUTSIDE_VALIDITY_WINDOW',
+      'Promo code is not active right now'
+    );
   }
 
   if (amount < promotion.minOrderAmount) {
@@ -139,7 +156,11 @@ async function validatePromotion({
       orderAmount: amount,
       minOrderAmount: promotion.minOrderAmount,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_MIN_ORDER_NOT_MET',
+      `Minimum order amount of $${roundMoney(promotion.minOrderAmount).toFixed(2)} not met`
+    );
   }
 
   const usageCounts = await getPromotionUsageCounts(promotion.id, normalizedPhone);
@@ -149,7 +170,11 @@ async function validatePromotion({
       promoCode: promotion.promoCode,
       customerPhone: normalizedPhone,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_ALREADY_USED',
+      'Promo code has already been used for this phone number'
+    );
   }
   if (usageCounts.totalUsage >= promotion.usageLimitTotal) {
     console.warn('[promotions.service] validation failed: promotion usage limit reached', {
@@ -158,7 +183,11 @@ async function validatePromotion({
       usageCounts,
       usageLimitTotal: promotion.usageLimitTotal,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_USAGE_LIMIT_REACHED',
+      'Promo code usage limit has been reached'
+    );
   }
 
   const discountAmount = calculateDiscount(promotion, amount);
@@ -168,12 +197,17 @@ async function validatePromotion({
       promoCode: promotion.promoCode,
       orderAmount: amount,
     });
-    return buildInvalidResult(amount);
+    return buildInvalidResult(
+      amount,
+      'PROMO_DISCOUNT_ZERO',
+      'Promo code does not apply to this order total'
+    );
   }
 
   const finalAmount = roundMoney(Math.max(amount - discountAmount, 0));
   const result = {
     valid: true,
+    reasonCode: null,
     promotionId: promotion.id,
     promoCode: promotion.promoCode,
     discountAmount,
