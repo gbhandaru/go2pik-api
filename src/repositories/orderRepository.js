@@ -655,11 +655,10 @@ async function partiallyAcceptOrder(orderId, {
 
     const subtotal = acceptedRows.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
     const taxAmount = Number((subtotal * Number(taxRate || 0)).toFixed(2));
-    const totalAmount = Number((subtotal + taxAmount).toFixed(2));
     const existingDiscountAmount = Number(order.discount_amount || 0);
     const recalculatedFinalAmount = existingDiscountAmount > 0
-      ? Number(Math.max(totalAmount - existingDiscountAmount, 0).toFixed(2))
-      : totalAmount;
+      ? Number(Math.max(subtotal - existingDiscountAmount, 0).toFixed(2))
+      : subtotal;
 
     await client.query(
       `
@@ -678,7 +677,7 @@ async function partiallyAcceptOrder(orderId, {
           updated_at = now()
       WHERE id = $1;
       `,
-      [orderId, subtotal, taxAmount, totalAmount, recalculatedFinalAmount, note || null]
+      [orderId, subtotal, taxAmount, subtotal, recalculatedFinalAmount, note || null]
     );
 
     await client.query('COMMIT');
