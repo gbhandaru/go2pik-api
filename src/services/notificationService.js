@@ -45,6 +45,16 @@ function renderItems(items = []) {
     .join('\n');
 }
 
+function resolvePayableAmountLabel(order = {}) {
+  if (order.payableAmountDisplay) {
+    return order.payableAmountDisplay;
+  }
+  if (order.finalAmountDisplay) {
+    return order.finalAmountDisplay;
+  }
+  return formatUsd(order.payableAmount ?? order.finalAmount ?? 0);
+}
+
 function isSmsConfigured() {
   const { twilio } = config;
   return Boolean(twilio?.accountSid && twilio?.authToken && twilio?.phoneNumber);
@@ -126,13 +136,16 @@ async function sendPartialAcceptanceSms(order) {
 function buildOrderEmail(order) {
   const { orderNumber, restaurant = {}, customer = {} } = order;
   const pickupTime = resolvePickupTimeLabel(order);
-  const totalAmount = order.finalAmountDisplay || formatUsd(order.finalAmount ?? 0);
+  const totalAmount = resolvePayableAmountLabel(order);
+  const discountAmount = order.discountAmountDisplay || formatUsd(order.discountAmount ?? 0);
+  const hasDiscount = Number(order.discountAmount || 0) > 0;
   const itemsText = renderItems(order.items || []);
   const subject = `Order ${orderNumber} confirmed at ${restaurant.name || 'Go2Pik'}`;
   const textBody = `Hi ${customer.name || 'there'},\n\n`
     + `Your order ${orderNumber} at ${restaurant.name || 'the restaurant'} is confirmed.\n\n`
     + `Pickup time: ${pickupTime}\n`
     + `Items:\n${itemsText}\n\n`
+    + (hasDiscount ? `Discount: -${discountAmount}\n` : '')
     + `Total amount: ${totalAmount}\n\n`
     + 'Thank you for ordering with Go2Pik!\n';
   const htmlBody = `
@@ -142,6 +155,7 @@ function buildOrderEmail(order) {
       <p><strong>Pickup time:</strong> ${pickupTime}</p>
       <p><strong>Items:</strong></p>
       <pre style="background:#f6f8fa; padding:12px; border-radius:6px;">${itemsText}</pre>
+      ${hasDiscount ? `<p><strong>Discount:</strong> -${discountAmount}</p>` : ''}
       <p><strong>Total amount:</strong> ${totalAmount}</p>
       <p>Thank you for ordering with Go2Pik!</p>
     </div>
