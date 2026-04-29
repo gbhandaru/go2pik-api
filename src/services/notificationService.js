@@ -193,7 +193,6 @@ async function deliverViaCustomProvider({ to, subject, text, html, metadata }) {
     timeoutMs = 8000,
   } = config.notifications;
   const controller = new AbortController();
-
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(providerUrl, {
