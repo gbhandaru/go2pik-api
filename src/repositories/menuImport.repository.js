@@ -82,7 +82,22 @@ async function updateMenuImport(id, fields, db = pool) {
 }
 
 async function getMenuImportById(id, db = pool) {
-  const { rows } = await db.query('SELECT * FROM menu_imports WHERE id = $1 LIMIT 1;', [id]);
+  const query = `
+    SELECT
+      id,
+      restaurant_id,
+      file_url,
+      file_type,
+      status,
+      raw_ocr_text,
+      parsed_json,
+      error_message,
+      created_at
+    FROM menu_imports
+    WHERE id = $1
+    LIMIT 1;
+  `;
+  const { rows } = await db.query(query, [id]);
   return mapMenuImport(rows[0]);
 }
 

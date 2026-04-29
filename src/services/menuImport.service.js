@@ -1,6 +1,10 @@
 const crypto = require('crypto');
 const ApiError = require('../utils/errors');
-const { createMenuImport, updateMenuImport } = require('../repositories/menuImport.repository');
+const {
+  createMenuImport,
+  updateMenuImport,
+  getMenuImportById: getMenuImportRecordById,
+} = require('../repositories/menuImport.repository');
 const {
   documentTextDetection,
   sanitizeErrorMessage,
@@ -164,8 +168,28 @@ async function uploadAndOcrMenuImport({ file, restaurantId }) {
   }
 }
 
+async function getMenuImportById(id) {
+  if (id === undefined || id === null || String(id).trim() === '') {
+    throw ApiError.badRequest('id is required');
+  }
+
+  const menuImport = await getMenuImportRecordById(id);
+  console.log('[menuImport.service] fetch result', {
+    importId: id,
+    found: Boolean(menuImport),
+    status: menuImport?.status || null,
+  });
+
+  if (!menuImport) {
+    throw ApiError.notFound('Menu import not found');
+  }
+
+  return menuImport;
+}
+
 module.exports = {
   uploadAndOcrMenuImport,
+  getMenuImportById,
   assertValidMenuImportRequest,
   normalizeFileType,
 };

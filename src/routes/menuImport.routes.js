@@ -1,7 +1,10 @@
 const express = require('express');
 const multer = require('multer');
 const ApiError = require('../utils/errors');
-const { uploadAndOcrMenuImport } = require('../controllers/menuImport.controller');
+const {
+  uploadAndOcrMenuImport,
+  getMenuImportById,
+} = require('../controllers/menuImport.controller');
 const { parseMenuImport } = require('../controllers/menuImportParse.controller');
 const { approveMenuImport } = require('../controllers/menuImportApproval.controller');
 
@@ -32,6 +35,7 @@ const upload = multer({
   },
 });
 
+router.get('/:id', getMenuImportById);
 router.post('/upload-and-ocr', upload.single('file'), uploadAndOcrMenuImport);
 router.post('/:id/parse', parseMenuImport);
 router.post('/:id/approve', approveMenuImport);

@@ -24,11 +24,22 @@ function errorHandler(err, req, res, next) {
   if (status >= 500) {
     console.error('[error]', err);
   }
-  res.status(status).json({
+  if (status === 404) {
+    res.status(status).json({
+      message: error.message || 'Not found',
+    });
+    return;
+  }
+  const payload = {
     message: error.message || 'Internal server error',
-    code: error.code || null,
-    details: error.details,
-  });
+  };
+  if (error.code !== undefined) {
+    payload.code = error.code;
+  }
+  if (error.details !== undefined) {
+    payload.details = error.details;
+  }
+  res.status(status).json(payload);
 }
 
 module.exports = errorHandler;
