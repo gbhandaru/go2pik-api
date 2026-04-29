@@ -35,6 +35,9 @@ function mergeAuthenticatedCustomerPayload(body = {}, authCustomer = null) {
   if (!mergedCustomer.phone) {
     mergedCustomer.phone = body.phoneNumber || body.phone || body.customerPhone || null;
   }
+  if (payload.smsConsentAccepted === undefined && payload.smsConsent === undefined && payload.sms_consent === undefined) {
+    payload.smsConsentAccepted = body.customer?.smsConsentAccepted ?? body.customer?.sms_consent ?? body.smsConsentAccepted ?? body.smsConsent ?? body.sms_consent ?? false;
+  }
   if (authCustomer) {
     mergedCustomer.id = authCustomer.id;
     mergedCustomer.email = mergedCustomer.email || authCustomer.email;
