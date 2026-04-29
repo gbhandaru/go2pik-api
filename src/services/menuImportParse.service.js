@@ -20,17 +20,22 @@ async function parseMenuImportById(id) {
     throw ApiError.badRequest('rawOcrText is missing for this menu import');
   }
 
+  await updateMenuImport(id, {
+    status: 'AI_PROCESSING',
+  });
+
   const parsedJson = await parseMenuFromOcr(rawOcrText);
 
-  const updatedImport = await updateMenuImport(id, {
+  const updatedWithParsedJson = await updateMenuImport(id, {
     parsed_json: parsedJson,
-    status: 'PARSED',
+    status: 'READY_FOR_REVIEW',
     error_message: null,
   });
 
   return {
-    menuImport: updatedImport,
+    menuImport: updatedWithParsedJson,
     parsedJson,
+    status: updatedWithParsedJson?.status || 'READY_FOR_REVIEW',
   };
 }
 

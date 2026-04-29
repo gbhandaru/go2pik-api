@@ -3,6 +3,7 @@ const multer = require('multer');
 const ApiError = require('../utils/errors');
 const { uploadAndOcrMenuImport } = require('../controllers/menuImport.controller');
 const { parseMenuImport } = require('../controllers/menuImportParse.controller');
+const { approveMenuImport } = require('../controllers/menuImportApproval.controller');
 
 const router = express.Router();
 
@@ -33,5 +34,6 @@ const upload = multer({
 
 router.post('/upload-and-ocr', upload.single('file'), uploadAndOcrMenuImport);
 router.post('/:id/parse', parseMenuImport);
+router.post('/:id/approve', approveMenuImport);
 
 module.exports = router;
