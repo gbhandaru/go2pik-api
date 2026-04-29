@@ -100,13 +100,12 @@ function normalizeReviewedParsedJson(parsedJson) {
       }
 
       const price = normalizePrice(item?.price);
+      if (price === null) {
+        return;
+      }
       const isVegetarian = normalizeBoolean(item?.isVegetarian);
       const description =
         typeof item?.description === 'string' ? item.description.trim() : item?.description ?? null;
-
-      if (item?.price !== null && item?.price !== undefined && price === null) {
-        return;
-      }
 
       normalizedItems.push({
         name: itemName,
@@ -161,6 +160,7 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
   const counts = {
     categoriesInserted: 0,
     itemsInserted: 0,
+    skippedItems: 0,
   };
 
   try {
@@ -190,6 +190,12 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
       for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
         const item = items[itemIndex];
         if (!item?.name) {
+          counts.skippedItems += 1;
+          continue;
+        }
+
+        if (item.price === null || item.price === undefined) {
+          counts.skippedItems += 1;
           continue;
         }
 
@@ -226,6 +232,7 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
       importId: id,
       categoriesInserted: counts.categoriesInserted,
       itemsInserted: counts.itemsInserted,
+      skippedItems: counts.skippedItems,
     });
 
     return {
