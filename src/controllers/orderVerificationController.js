@@ -21,6 +21,7 @@ const start = asyncHandler(async (req, res) => {
     hasCustomer: Boolean(req.body?.customer),
     hasItems: Array.isArray(req.body?.items),
     restaurantId: req.body?.restaurantId || null,
+    smsConsentRaw: req.body?.smsConsent ?? req.body?.sms_consent ?? null,
     rawPhonePresent: Boolean(rawPhone),
     rawPhoneMasked: rawPhone ? `***${String(rawPhone).replace(/\D/g, '').slice(-4)}` : null,
     bodyKeys: Object.keys(req.body || {}),
