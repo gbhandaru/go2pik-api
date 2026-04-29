@@ -5,20 +5,48 @@ const { normalizePhoneNumber, maskPhoneNumber } = require('../utils/phone');
 const { createVerificationSession, getVerificationSessionById, updateVerificationSession } = require('../repositories/orderVerificationRepository');
 const { createOrder, prepareOrderDraft } = require('./orderService');
 
-function normalizePickupType(value) {
-  const normalized = String(value || '').trim().toUpperCase();
-  if (normalized === 'SCHEDULED') {
-    return 'SCHEDULED';
-  }
-  return 'ASAP';
-}
-
 function getExpiryDate() {
   return new Date(Date.now() + Number(config.verification.otpExpiryMinutes || 10) * 60 * 1000);
 }
 
 function getResendAvailableDate() {
   return new Date(Date.now() + Number(config.verification.otpResendCooldownSeconds || 30) * 1000);
+}
+
+function normalizeSmsConsent(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
+}
+
+function buildConsentDetails(payload = {}) {
+  const smsConsent = normalizeSmsConsent(
+    payload.smsConsent ??
+      payload.customer?.smsConsent ??
+      payload.customer?.sms_consent ??
+      false
+  );
+  return {
+    smsConsent,
+    smsConsentAt: smsConsent ? new Date().toISOString() : null,
+    smsConsentText: smsConsent
+      ? payload.smsConsentText ||
+        payload.customer?.smsConsentText ||
+        payload.customer?.sms_consent_text ||
+        null
+      : null,
+    smsConsentVersion: smsConsent
+      ? payload.smsConsentVersion ||
+        payload.customer?.smsConsentVersion ||
+        payload.customer?.sms_consent_version ||
+        null
+      : null,
+    smsOptInSource: smsConsent
+      ? payload.smsOptInSource ||
+        payload.smsConsentSource ||
+        payload.customer?.smsOptInSource ||
+        payload.customer?.sms_consent_source ||
+        null
+      : null,
+  };
 }
 
 function toSessionResponse(session) {
@@ -86,8 +114,39 @@ async function testOrderVerificationService(payload = {}) {
 }
 
 async function startOrderVerification(payload = {}) {
-  ensureVerificationConfig();
   const draft = await prepareOrderDraft(payload);
+  const consent = buildConsentDetails(payload);
+  draft.customer = {
+    ...(draft.customer || {}),
+    ...consent,
+  };
+  if (!consent.smsConsent) {
+    console.log('[orderVerificationService] smsConsent=false, creating order without OTP', {
+      restaurantId: draft.restaurantId,
+      customerPhonePresent: Boolean(draft.customer?.phone),
+      itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
+    });
+    const order = await createOrder({
+      ...payload,
+      smsConsent: false,
+      smsConsentAt: consent.smsConsentAt,
+      smsConsentText: consent.smsConsentText,
+      smsConsentVersion: consent.smsConsentVersion,
+      smsOptInSource: consent.smsOptInSource,
+      customer: {
+        ...(payload.customer || {}),
+        ...(draft.customer || {}),
+        ...consent,
+      },
+    });
+    return {
+      verification: null,
+      order: order.order || order,
+      automation: order.automation || null,
+      notification: order.notification || null,
+    };
+  }
+  ensureVerificationConfig();
   const customerPhone = normalizePhoneNumber(draft.customer?.phone);
   if (!customerPhone) {
     throw ApiError.badRequest('customer.phone is required');
@@ -110,11 +169,17 @@ async function startOrderVerification(payload = {}) {
     restaurantId: draft.restaurantId,
     pickupType: draft.pickupType,
     pickupTime: draft.pickupTime || null,
+    smsConsent: consent.smsConsent,
+    smsConsentAt: consent.smsConsentAt,
+    smsConsentText: consent.smsConsentText,
+    smsConsentVersion: consent.smsConsentVersion,
+    smsOptInSource: consent.smsOptInSource,
     pendingOrderPayload: {
       ...draft,
       customer: {
         ...draft.customer,
         phone: customerPhone,
+        ...consent,
       },
     },
     status: 'pending',

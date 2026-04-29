@@ -36,6 +36,7 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
   try {
     await client.query('BEGIN');
     const normalizedCustomerPhone = normalizePhoneNumber(customer.phone || '');
+    const smsConsent = Boolean(customer.smsConsent);
     const appliedFinalAmount = promotion?.finalAmount !== undefined && promotion?.finalAmount !== null
       ? Number(promotion.finalAmount)
       : totals.total;
@@ -49,6 +50,12 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
       customer.email || null,
       customer.pickupTime ? new Date(customer.pickupTime) : null,
       customer.notes || null,
+      smsConsent,
+      customer.smsConsentAt || null,
+      smsConsent ? customer.smsConsentPhone || customer.phone || null : null,
+      customer.smsConsentText || null,
+      customer.smsConsentVersion || null,
+      customer.smsOptInSource || null,
       totals.subtotal,
       totals.tax,
       appliedFinalAmount,
@@ -68,6 +75,12 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
       'customer_email',
       'pickup_time',
       'notes',
+      'sms_consent',
+      'sms_consent_at',
+      'sms_consent_phone',
+      'sms_consent_text',
+      'sms_consent_version',
+      'sms_opt_in_source',
       'subtotal',
       'tax_amount',
       'total_amount',
@@ -97,6 +110,12 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
       '$14',
       '$15',
       '$16',
+      '$17',
+      '$18',
+      '$19',
+      '$20',
+      '$21',
+      '$22',
     ];
     assertInsertArity('Order', orderColumns, orderSelectExpressions);
     const query = `
@@ -190,6 +209,12 @@ async function getOrderById(orderId) {
       o.customer_email,
       o.pickup_time,
       o.notes,
+      o.sms_consent,
+      o.sms_consent_at,
+      o.sms_consent_phone,
+      o.sms_consent_text,
+      o.sms_consent_version,
+      o.sms_opt_in_source,
       o.subtotal,
       o.tax_amount,
       o.total_amount,
@@ -252,6 +277,12 @@ async function getOrderByOrderNumber(orderNumber) {
       o.customer_email,
       o.pickup_time,
       o.notes,
+      o.sms_consent,
+      o.sms_consent_at,
+      o.sms_consent_phone,
+      o.sms_consent_text,
+      o.sms_consent_version,
+      o.sms_opt_in_source,
       o.subtotal,
       o.tax_amount,
       o.total_amount,
@@ -367,6 +398,12 @@ async function listOrders({
       o.customer_email,
       o.pickup_time,
       o.notes,
+      o.sms_consent,
+      o.sms_consent_at,
+      o.sms_consent_phone,
+      o.sms_consent_text,
+      o.sms_consent_version,
+      o.sms_opt_in_source,
       o.subtotal,
       o.tax_amount,
       o.total_amount,

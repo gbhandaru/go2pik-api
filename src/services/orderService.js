@@ -69,6 +69,10 @@ function normalizeMenuItems(items, restaurant) {
   });
 }
 
+function normalizeSmsConsent(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
+}
+
 function enrichOrderRow(row) {
   if (!row) return row;
   const rawItems = Array.isArray(row.items) ? row.items : JSON.parse(row.items || '[]');
@@ -106,6 +110,12 @@ function enrichOrderRow(row) {
       pickupTime: row.pickup_time,
       notes: row.notes,
     },
+    smsConsent: Boolean(row.sms_consent),
+    smsConsentAt: row.sms_consent_at || null,
+    smsConsentPhone: row.sms_consent_phone || null,
+    smsConsentText: row.sms_consent_text || null,
+    smsConsentVersion: row.sms_consent_version || null,
+    smsOptInSource: row.sms_opt_in_source || null,
     items,
     subtotal: Number(row.subtotal),
     grossSubtotal: Number(row.subtotal),
@@ -253,11 +263,32 @@ async function prepareOrderDraft(payload = {}) {
   const rawCandidateId = customer.id || rootCustomerId || customer.customerId;
   const candidateCustomerId = rawCandidateId ? Number(rawCandidateId) : null;
   const normalizedPromoCode = normalizePromoCode(payload.promoCode || payload.promotionCode);
+  const smsConsent = normalizeSmsConsent(
+    payload.smsConsent ??
+      customer.smsConsent ??
+      customer.sms_consent ??
+      false
+  );
+  const smsConsentAt = smsConsent ? new Date().toISOString() : null;
+  const smsConsentPhone = smsConsent ? normalizePhoneNumber(customer.phone || '') || customer.phone || null : null;
+  const smsConsentText = smsConsent ? payload.smsConsentText || customer.smsConsentText || customer.sms_consent_text || null : null;
+  const smsConsentVersion = smsConsent
+    ? payload.smsConsentVersion || customer.smsConsentVersion || customer.sms_consent_version || null
+    : null;
+  const smsOptInSource = smsConsent
+    ? payload.smsOptInSource || payload.smsConsentSource || customer.smsOptInSource || customer.sms_consent_source || null
+    : null;
   const normalizedCustomer = {
     ...customer,
     email: derivedEmail,
     pickupType,
     pickupTime,
+    smsConsent,
+    smsConsentAt,
+    smsConsentPhone,
+    smsConsentText,
+    smsConsentVersion,
+    smsOptInSource,
   };
   if (!customer.email) {
     if (derivedEmail) {
