@@ -11,7 +11,12 @@ const {
 } = require('../utils/authenticatedCustomer');
 
 const start = asyncHandler(async (req, res) => {
-  const rawPhone = req.body?.customer?.phone || req.body?.phone || req.body?.customerPhone || null;
+  const rawPhone =
+    req.body?.customer?.phone ||
+    req.body?.phoneNumber ||
+    req.body?.phone ||
+    req.body?.customerPhone ||
+    null;
   console.log('[orderVerificationController] verification start requested', {
     hasCustomer: Boolean(req.body?.customer),
     hasItems: Array.isArray(req.body?.items),

@@ -32,6 +32,9 @@ async function resolveAuthenticatedCustomer(req) {
 function mergeAuthenticatedCustomerPayload(body = {}, authCustomer = null) {
   const mergedCustomer = { ...(body.customer || {}) };
   const payload = { ...body };
+  if (!mergedCustomer.phone) {
+    mergedCustomer.phone = body.phoneNumber || body.phone || body.customerPhone || null;
+  }
   if (authCustomer) {
     mergedCustomer.id = authCustomer.id;
     mergedCustomer.email = mergedCustomer.email || authCustomer.email;

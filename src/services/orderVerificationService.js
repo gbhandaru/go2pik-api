@@ -148,9 +148,6 @@ async function startOrderVerification(payload = {}) {
   }
   ensureVerificationConfig();
   const customerPhone = normalizePhoneNumber(draft.customer?.phone);
-  if (!customerPhone) {
-    throw ApiError.badRequest('customer.phone is required');
-  }
   const maskedPhone = maskPhoneNumber(customerPhone);
   console.log('[orderVerificationService] start verification draft prepared', {
     restaurantId: draft.restaurantId,

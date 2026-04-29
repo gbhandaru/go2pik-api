@@ -233,6 +233,16 @@ async function prepareOrderDraft(payload = {}) {
   }
   const restaurant = await getRestaurantById(restaurantId);
   const normalizedItems = normalizeMenuItems(items, restaurant);
+  const customerPhone = normalizePhoneNumber(
+    customer.phone ||
+      payload.phoneNumber ||
+      payload.phone ||
+      payload.customerPhone ||
+      ''
+  );
+  if (!customerPhone) {
+    throw ApiError.badRequest('phoneNumber is required');
+  }
   const pickupTime = customer.pickupTime || customer.pickup_time || null;
   const pickupTypeHint = String(customer.pickupType || customer.pickup_type || '').trim().toUpperCase();
   const pickupType = pickupTypeHint === 'SCHEDULED' || pickupTime ? 'SCHEDULED' : 'ASAP';
@@ -281,6 +291,7 @@ async function prepareOrderDraft(payload = {}) {
   const normalizedCustomer = {
     ...customer,
     email: derivedEmail,
+    phone: customerPhone,
     pickupType,
     pickupTime,
     smsConsent,
