@@ -60,6 +60,12 @@ function mapOrder(row) {
     orderNumber: row.order_number,
     status: row.status,
     paymentStatus: row.payment_status,
+    smsConsent: Boolean(row.sms_consent),
+    smsConsentAt: row.sms_consent_at || null,
+    smsConsentPhone: row.sms_consent_phone || null,
+    smsConsentText: row.sms_consent_text || null,
+    smsConsentVersion: row.sms_consent_version || null,
+    smsOptInSource: row.sms_opt_in_source || null,
     customer: {
       name: row.customer_name,
       phone: row.customer_phone,

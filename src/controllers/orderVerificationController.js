@@ -36,11 +36,15 @@ const start = asyncHandler(async (req, res) => {
     twilioVerificationSid: result?.verification?.twilioVerificationSid || null,
     expiresAt: result?.verification?.expiresAt || null,
     resendAvailableAt: result?.verification?.resendAvailableAt || null,
+    orderNumber: result?.order?.orderNumber || null,
   });
   res.status(201).json({
     success: true,
-    message: 'OTP sent successfully',
+    message: result.verification ? 'OTP sent successfully' : 'Order placed successfully without SMS consent',
     verification: result.verification,
+    order: result.order || null,
+    automation: result.automation || null,
+    notification: result.notification || null,
     twilioVerification: result.twilioVerification || null,
   });
 });

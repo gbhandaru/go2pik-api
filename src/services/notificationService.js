@@ -88,6 +88,12 @@ function buildPartialAcceptanceSms(order, token) {
 async function sendPartialAcceptanceSms(order) {
   const rawPhone = order?.customer?.phone || '';
   const normalizedPhone = normalizePhoneNumber(rawPhone);
+  if (!order?.smsConsent) {
+    console.warn('[notification] skipping partial acceptance SMS: customer did not opt in', {
+      orderNumber: order?.orderNumber || null,
+    });
+    return { delivered: false, skipped: true, reason: 'sms_consent_not_granted' };
+  }
   if (!normalizedPhone) {
     console.warn('[notification] skipping partial acceptance SMS: missing customer phone', {
       orderNumber: order?.orderNumber || null,

@@ -76,7 +76,7 @@ The dev script starts `src/server.js`, which loads `src/app.js`, configures CORS
 - `POST /api/customers`, `GET/PUT /api/customers/:id`, `GET /api/customers/:id/orders`, `PATCH /api/customers/:id/deactivate`
 - `GET /api/restaurants` (optional `?city=`), `GET /api/restaurants/:id/menu`
 - `POST /api/restaurants/:restaurantId/users`, `GET /api/restaurants/:restaurantId/users`, `PUT/PATCH /api/restaurant-users/:id`
-- `POST /api/orders` is disabled for direct client order creation; use the verification flow below. `GET /api/orders`, `GET /api/orders/:id`
+- `POST /api/orders` creates a direct non-SMS order when `smsConsent=false`. `GET /api/orders`, `GET /api/orders/:id`
 - `PATCH /api/orders/:id/accept-updated` and `PATCH /api/orders/:id/cancel` for authenticated customer review of partially accepted orders
 - `GET /api/orders/review/:orderNumber?token=...`, `PATCH /api/orders/review/:orderNumber/accept-updated?token=...`, and `PATCH /api/orders/review/:orderNumber/cancel?token=...` for SMS-driven order review
 - `POST /api/orders/verification/start`, `POST /api/orders/verification/confirm`, `POST /api/orders/verification/resend`, `POST /api/orders/verification/test`
@@ -241,26 +241,45 @@ GET /api/dashboard/restaurants/12/reports/orders?from=2026-04-01&to=2026-04-20
 - Order placement triggers a stub automation (`src/utils/automation.js`) that can be extended to real browser automation later.
 - Error handling is centralized (`src/middlewares/errorHandler.js`) to normalize responses and surface validation issues.
 - Order confirmations can trigger email notifications. Configure the provider via the `NOTIFICATIONS_*` env vars and the API will POST to your provider from `src/services/notificationService.js` after a successful order.
-- OTP verification is handled through Twilio SMS. The service uses `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` plus the OTP timing values above to manage pending order verification sessions before the final order is created.
+- OTP verification is handled through Twilio SMS for opted-in users only. The service uses `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` plus the OTP timing values above to manage pending order verification sessions before the final order is created.
 
 ### OTP Flow
 
 1. `POST /api/orders/verification/start`
-   - Body: same order draft you would normally send to `POST /api/orders`
-   - Response: `{ success, message, verification }`
-2. `POST /api/orders/verification/confirm`
+   - Body: same order draft you would normally send to `POST /api/orders`, plus `smsConsent`
+   - If `smsConsent=true`: sends OTP and returns `{ success, message, verification }`
+   - If `smsConsent=false`: skips OTP, creates the order, and returns `{ success, message, order }`
+2. `POST /api/orders`
+   - Body: same order draft with `smsConsent=false`
+   - Response: `{ success, message, order }`
+3. `POST /api/orders/verification/confirm`
    - Body: `{ verificationId, code }`
    - Response: `{ success, message, verification, order, automation, notification }`
    - Failure cases:
      - wrong code: `400 Bad Request`
      - expired code: `400 Bad Request`
      - consumed session: `409 Conflict`
-3. `POST /api/orders/verification/resend`
+4. `POST /api/orders/verification/resend`
    - Body: `{ verificationId }`
    - Response: `{ success, message, verification }`
-4. `POST /api/orders/verification/test`
+5. `POST /api/orders/verification/test`
    - Body: optional `{ phone }`
    - Response: `{ success, message, service, verification }`
+
+### SMS Consent Fields
+
+- `smsConsent: true | false`
+- Optional consent audit fields:
+  - `smsConsentText`
+  - `smsConsentVersion`
+  - `smsOptInSource`
+- Stored on the order:
+  - `sms_consent`
+  - `sms_consent_at`
+  - `sms_consent_phone`
+  - `sms_consent_text`
+  - `sms_consent_version`
+  - `sms_opt_in_source`
 
 ### Customer Phone Update
 

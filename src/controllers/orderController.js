@@ -4,6 +4,7 @@ const {
   getOrderById,
   getOrderByNumber,
   getOrders,
+  createOrder,
   acceptUpdatedOrder,
   cancelUpdatedOrder,
 } = require('../services/orderService');
@@ -11,7 +12,21 @@ const { resolveAuthenticatedCustomer } = require('../utils/authenticatedCustomer
 const { verifyOrderReviewToken } = require('../utils/token');
 
 const createOrderController = asyncHandler(async (req, res) => {
-  throw ApiError.forbidden('Direct order creation is disabled. Use /api/orders/verification/start and /confirm.');
+  const smsConsent = req.body?.smsConsent === true || req.body?.smsConsent === 'true';
+  if (smsConsent) {
+    throw ApiError.badRequest('smsConsent=true requires the OTP verification flow. Use /api/orders/verification/start.');
+  }
+  const result = await createOrder({
+    ...req.body,
+    smsConsent: false,
+  });
+  res.status(201).json({
+    success: true,
+    message: 'Order placed successfully',
+    order: result.order,
+    automation: result.automation,
+    notification: result.notification,
+  });
 });
 
 const listOrdersController = asyncHandler(async (req, res) => {
