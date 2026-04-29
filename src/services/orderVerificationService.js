@@ -25,8 +25,10 @@ function normalizeSmsConsent(value) {
 function buildConsentDetails(payload = {}) {
   const smsConsent = normalizeSmsConsent(
     payload.smsConsent ??
+      payload.smsConsentAccepted ??
       payload.sms_consent ??
       payload.customer?.smsConsent ??
+      payload.customer?.smsConsentAccepted ??
       payload.customer?.sms_consent ??
       false
   );

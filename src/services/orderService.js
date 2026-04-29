@@ -280,8 +280,10 @@ async function prepareOrderDraft(payload = {}) {
   const normalizedPromoCode = normalizePromoCode(payload.promoCode || payload.promotionCode);
   const smsConsent = normalizeSmsConsent(
     payload.smsConsent ??
+      payload.smsConsentAccepted ??
       payload.sms_consent ??
       customer.smsConsent ??
+      customer.smsConsentAccepted ??
       customer.sms_consent ??
       false
   );
