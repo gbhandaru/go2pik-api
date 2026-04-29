@@ -33,7 +33,17 @@ BEGIN
   ) THEN
     ALTER TABLE menu_imports
       ADD CONSTRAINT chk_menu_imports_status
-      CHECK (UPPER(status) IN ('UPLOADED', 'OCR_PROCESSING', 'OCR_COMPLETED', 'FAILED'));
+      CHECK (
+        UPPER(status) IN (
+          'UPLOADED',
+          'OCR_PROCESSING',
+          'OCR_COMPLETED',
+          'AI_PROCESSING',
+          'READY_FOR_REVIEW',
+          'APPROVED',
+          'FAILED'
+        )
+      );
   END IF;
 END $$;
 

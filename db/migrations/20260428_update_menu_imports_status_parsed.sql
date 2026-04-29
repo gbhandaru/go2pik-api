@@ -1,4 +1,4 @@
--- Extend menu import status lifecycle to include parsed records.
+-- Extend menu import status lifecycle to include AI review states.
 DO $$
 BEGIN
   IF EXISTS (
@@ -22,6 +22,16 @@ BEGIN
   ) THEN
     ALTER TABLE menu_imports
       ADD CONSTRAINT chk_menu_imports_status
-      CHECK (UPPER(status) IN ('UPLOADED', 'OCR_PROCESSING', 'OCR_COMPLETED', 'PARSED', 'FAILED'));
+      CHECK (
+        UPPER(status) IN (
+          'UPLOADED',
+          'OCR_PROCESSING',
+          'OCR_COMPLETED',
+          'AI_PROCESSING',
+          'READY_FOR_REVIEW',
+          'APPROVED',
+          'FAILED'
+        )
+      );
   END IF;
 END $$;
