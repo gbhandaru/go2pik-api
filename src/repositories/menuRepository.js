@@ -26,6 +26,29 @@ async function listMenuItems(restaurantId, db = pool) {
   return rows;
 }
 
+async function getMenuItemByName(restaurantId, categoryId, name, db = pool) {
+  const query = `
+    SELECT
+      mi.id,
+      mi.category_id,
+      mi.name,
+      mi.description,
+      mi.price,
+      mi.is_vegetarian,
+      mi.is_vegan,
+      mi.is_available,
+      mi.display_order
+    FROM menu_items mi
+    WHERE mi.restaurant_id = $1
+      AND mi.category_id = $2
+      AND LOWER(mi.name) = LOWER($3)
+      AND mi.deleted_at IS NULL
+    LIMIT 1;
+  `;
+  const { rows } = await runQuery(db, query, [restaurantId, categoryId, name]);
+  return rows[0] || null;
+}
+
 async function insertMenuItem(restaurantId, fields, db = pool) {
   const allowed = ['category_id', 'name', 'description', 'price', 'is_vegetarian', 'is_vegan', 'is_available'];
   const columns = ['restaurant_id'];
@@ -135,6 +158,23 @@ async function listMenuCategories(restaurantId, db = pool) {
   return rows;
 }
 
+async function getMenuCategoryByName(restaurantId, name, db = pool) {
+  const query = `
+    SELECT
+      mc.id,
+      mc.restaurant_id,
+      mc.name,
+      mc.display_order,
+      mc.is_active
+    FROM menu_categories mc
+    WHERE mc.restaurant_id = $1
+      AND LOWER(mc.name) = LOWER($2)
+    LIMIT 1;
+  `;
+  const { rows } = await runQuery(db, query, [restaurantId, name]);
+  return rows[0] || null;
+}
+
 async function insertMenuCategory(restaurantId, fields, db = pool) {
   const allowed = ['name', 'display_order', 'is_active'];
   const columns = ['restaurant_id'];
@@ -212,12 +252,14 @@ async function setMenuItemAvailability(menuItemId, isAvailable, db = pool) {
 
 module.exports = {
   listMenuItems,
+  getMenuItemByName,
   insertMenuItem,
   updateMenuItem,
   getMenuItemById,
   setMenuItemAvailability,
   deleteMenuItem,
   listMenuCategories,
+  getMenuCategoryByName,
   insertMenuCategory,
   updateMenuCategory,
   getMenuCategoryById,

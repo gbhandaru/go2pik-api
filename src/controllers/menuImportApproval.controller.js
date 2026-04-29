@@ -7,6 +7,7 @@ const approveMenuImportController = asyncHandler(async (req, res) => {
     importId: result.menuImport?.id,
     status: result.status,
     categoriesInserted: result.categoriesInserted,
+    categoriesReused: result.categoriesReused,
     itemsInserted: result.itemsInserted,
     skippedItems: result.skippedItems,
     message: result.message,

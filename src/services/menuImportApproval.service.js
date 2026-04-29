@@ -5,7 +5,9 @@ const {
   updateMenuImport,
 } = require('../repositories/menuImport.repository');
 const {
+  getMenuCategoryByName,
   insertMenuCategory,
+  getMenuItemByName,
   insertMenuItem,
 } = require('../repositories/menuRepository');
 
@@ -159,6 +161,7 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
   const client = await pool.connect();
   const counts = {
     categoriesInserted: 0,
+    categoriesReused: 0,
     itemsInserted: 0,
     skippedItems: 0,
   };
@@ -174,17 +177,21 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
 
     for (let categoryIndex = 0; categoryIndex < reviewedParsedJson.categories.length; categoryIndex += 1) {
       const category = reviewedParsedJson.categories[categoryIndex];
-      const createdCategory = await insertMenuCategory(
-        menuImport.restaurantId,
-        {
-          name: category.name,
-          display_order: categoryIndex + 1,
-          is_active: true,
-        },
-        client
-      );
-
-      counts.categoriesInserted += 1;
+      let categoryRecord = await getMenuCategoryByName(menuImport.restaurantId, category.name, client);
+      if (categoryRecord) {
+        counts.categoriesReused += 1;
+      } else {
+        categoryRecord = await insertMenuCategory(
+          menuImport.restaurantId,
+          {
+            name: category.name,
+            display_order: categoryIndex + 1,
+            is_active: true,
+          },
+          client
+        );
+        counts.categoriesInserted += 1;
+      }
 
       const items = Array.isArray(category.items) ? category.items : [];
       for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
@@ -199,10 +206,21 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
           continue;
         }
 
+        const existingItem = await getMenuItemByName(
+          menuImport.restaurantId,
+          categoryRecord.id,
+          item.name,
+          client
+        );
+        if (existingItem) {
+          counts.skippedItems += 1;
+          continue;
+        }
+
         await insertMenuItem(
           menuImport.restaurantId,
           {
-            category_id: createdCategory.id,
+            category_id: categoryRecord.id,
             name: item.name,
             description: item.description ?? null,
             price: item.price,
@@ -231,6 +249,7 @@ async function approveMenuImportById(id, reviewedParsedJsonInput) {
     console.log('[menuImportApproval] approval completed', {
       importId: id,
       categoriesInserted: counts.categoriesInserted,
+      categoriesReused: counts.categoriesReused,
       itemsInserted: counts.itemsInserted,
       skippedItems: counts.skippedItems,
     });
