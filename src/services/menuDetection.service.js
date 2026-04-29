@@ -109,23 +109,27 @@ function detectMenuContent(rawOcrText) {
     reasons.push('OCR text is empty');
   }
 
-  if (priceCount < 2) {
-    reasons.push('fewer than 2 price patterns found');
+  if (priceCount < 1) {
+    reasons.push('no price patterns found');
   }
 
-  if (likelyMenuItemLines.length < 2) {
-    reasons.push('fewer than 2 likely item-price lines found');
+  if (likelyMenuItemLines.length < 1) {
+    reasons.push('no likely item-price lines found');
   }
 
   if (negativeReasons.length > 0) {
     reasons.push(...negativeReasons);
   }
 
-  const isMenu =
-    text.length > 0 &&
-    likelyMenuItemLines.length >= 2 &&
-    negativeReasons.length === 0 &&
-    (priceCount >= 3 || likelyMenuItemLines.length >= 3);
+  const strongPositiveEvidence = likelyMenuItemLines.length >= 1 && priceCount >= 1;
+  const veryStrongPositiveEvidence = likelyMenuItemLines.length >= 2 || priceCount >= 2;
+  const promoDominated =
+    negativeReasons.length >= 2 &&
+    !veryStrongPositiveEvidence &&
+    priceCount < 2 &&
+    likelyMenuItemLines.length < 2;
+
+  const isMenu = text.length > 0 && strongPositiveEvidence && !promoDominated;
 
   const confidence = calculateConfidence({
     priceCount,
