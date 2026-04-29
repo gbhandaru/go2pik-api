@@ -20,7 +20,7 @@ function errorHandler(err, req, res, next) {
   }
   const mapped = mapDbError(err);
   const error = mapped || err;
-  const status = error.status || 500;
+  const status = error.status || (error?.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
   if (status >= 500) {
     console.error('[error]', err);
   }
