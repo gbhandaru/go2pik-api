@@ -11,6 +11,8 @@ function mapMenuImport(row) {
     fileType: row.file_type,
     status: row.status,
     rawOcrText: row.raw_ocr_text,
+    correctedOcrText: row.corrected_ocr_text,
+    correctionNotes: row.correction_notes,
     parsedJson: row.parsed_json,
     errorMessage: row.error_message,
     createdAt: row.created_at,
@@ -26,10 +28,12 @@ async function createMenuImport(fields, db = pool) {
       file_type,
       status,
       raw_ocr_text,
+      corrected_ocr_text,
+      correction_notes,
       parsed_json,
       error_message
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *;
   `;
   const values = [
@@ -38,6 +42,8 @@ async function createMenuImport(fields, db = pool) {
     fields.fileType,
     fields.status || 'UPLOADED',
     fields.rawOcrText || null,
+    fields.correctedOcrText === undefined ? null : fields.correctedOcrText,
+    fields.correctionNotes === undefined ? null : fields.correctionNotes,
     fields.parsedJson === undefined ? null : fields.parsedJson,
     fields.errorMessage || null,
   ];
@@ -52,6 +58,8 @@ async function updateMenuImport(id, fields, db = pool) {
     'file_type',
     'status',
     'raw_ocr_text',
+    'corrected_ocr_text',
+    'correction_notes',
     'parsed_json',
     'error_message',
   ];
@@ -90,6 +98,8 @@ async function getMenuImportById(id, db = pool) {
       file_type,
       status,
       raw_ocr_text,
+      corrected_ocr_text,
+      correction_notes,
       parsed_json,
       error_message,
       created_at

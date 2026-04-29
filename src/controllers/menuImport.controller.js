@@ -44,6 +44,8 @@ const getMenuImportByIdController = asyncHandler(async (req, res) => {
     fileType: menuImport.fileType,
     status: menuImport.status,
     rawOcrText: menuImport.rawOcrText,
+    correctedOcrText: menuImport.correctedOcrText,
+    correctionNotes: menuImport.correctionNotes,
     parsedJson: menuImport.parsedJson,
     errorMessage: menuImport.errorMessage,
     createdAt: menuImport.createdAt,

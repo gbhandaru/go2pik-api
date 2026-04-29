@@ -4,6 +4,7 @@ const {
   updateMenuImport,
 } = require('../repositories/menuImport.repository');
 const { detectMenuContent } = require('./menuDetection.service');
+const { correctMenuOcrText } = require('./menuCorrectionGemini.service');
 const { parseMenuFromOcr } = require('./menuParserGemini.service');
 
 async function parseMenuImportById(id) {
@@ -67,7 +68,46 @@ async function parseMenuImportById(id) {
   });
 
   try {
-    const parsedJson = await parseMenuFromOcr(rawOcrText);
+    let correctionResult = null;
+    let textToParse = rawOcrText;
+
+    try {
+      correctionResult = await correctMenuOcrText(rawOcrText);
+      textToParse = String(correctionResult?.correctedText || rawOcrText).trim() || rawOcrText;
+      console.log('[menuImportParse] correction result', {
+        importId: id,
+        correctedLength: textToParse.length,
+        corrections: correctionResult?.corrections?.length || 0,
+        warnings: correctionResult?.warnings || [],
+      });
+    } catch (correctionError) {
+      console.error('[menuImportParse] correction failed, falling back to raw OCR', {
+        importId: id,
+        error: correctionError?.message || correctionError,
+      });
+      correctionResult = {
+        correctedText: rawOcrText,
+        corrections: [],
+        warnings: [
+          `OCR correction failed: ${correctionError?.message || 'Unknown error'}`,
+        ],
+      };
+      textToParse = rawOcrText;
+    }
+
+    try {
+      await updateMenuImport(id, {
+        corrected_ocr_text: correctionResult?.correctedText || textToParse,
+        correction_notes: correctionResult,
+      });
+    } catch (persistenceError) {
+      console.error('[menuImportParse] failed to persist OCR correction, continuing with parsing', {
+        importId: id,
+        error: persistenceError?.message || persistenceError,
+      });
+    }
+
+    const parsedJson = await parseMenuFromOcr(textToParse);
 
     const updatedWithParsedJson = await updateMenuImport(id, {
       parsed_json: parsedJson,
