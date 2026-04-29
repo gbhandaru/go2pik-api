@@ -14,12 +14,18 @@ function getResendAvailableDate() {
 }
 
 function normalizeSmsConsent(value) {
-  return value === true || value === 'true' || value === 1 || value === '1';
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return ['true', '1', 'yes', 'y', 'on'].includes(normalized);
+  }
+  return false;
 }
 
 function buildConsentDetails(payload = {}) {
   const smsConsent = normalizeSmsConsent(
     payload.smsConsent ??
+      payload.sms_consent ??
       payload.customer?.smsConsent ??
       payload.customer?.sms_consent ??
       false

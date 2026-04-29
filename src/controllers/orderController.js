@@ -12,7 +12,8 @@ const { resolveAuthenticatedCustomer } = require('../utils/authenticatedCustomer
 const { verifyOrderReviewToken } = require('../utils/token');
 
 const createOrderController = asyncHandler(async (req, res) => {
-  const smsConsent = req.body?.smsConsent === true || req.body?.smsConsent === 'true';
+  const rawSmsConsent = req.body?.smsConsent ?? req.body?.sms_consent ?? false;
+  const smsConsent = ['true', '1', 'yes', 'y', 'on'].includes(String(rawSmsConsent).trim().toLowerCase()) || rawSmsConsent === true || rawSmsConsent === 1;
   if (smsConsent) {
     throw ApiError.badRequest('smsConsent=true requires the OTP verification flow. Use /api/orders/verification/start.');
   }

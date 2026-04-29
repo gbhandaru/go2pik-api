@@ -70,7 +70,12 @@ function normalizeMenuItems(items, restaurant) {
 }
 
 function normalizeSmsConsent(value) {
-  return value === true || value === 'true' || value === 1 || value === '1';
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return ['true', '1', 'yes', 'y', 'on'].includes(normalized);
+  }
+  return false;
 }
 
 function enrichOrderRow(row) {
@@ -275,6 +280,7 @@ async function prepareOrderDraft(payload = {}) {
   const normalizedPromoCode = normalizePromoCode(payload.promoCode || payload.promotionCode);
   const smsConsent = normalizeSmsConsent(
     payload.smsConsent ??
+      payload.sms_consent ??
       customer.smsConsent ??
       customer.sms_consent ??
       false
