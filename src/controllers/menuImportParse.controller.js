@@ -6,7 +6,9 @@ const parseMenuImportController = asyncHandler(async (req, res) => {
   res.json({
     importId: result.menuImport?.id,
     status: result.status,
+    isMenu: result.isMenu,
     parsedJson: result.parsedJson,
+    detection: result.detection,
   });
 });
 
