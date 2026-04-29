@@ -1,4 +1,5 @@
 const PRICE_REGEX = /\$?\d{1,3}(?:\.\d{2})?/g;
+const PRICE_LINE_REGEX = /^\$?\d{1,3}(?:\.\d{2})?$/;
 
 const NEGATIVE_PATTERNS = [
   /scan/i,
@@ -30,6 +31,35 @@ function countPriceMatches(text) {
   return matches ? matches.length : 0;
 }
 
+function isPriceLine(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) {
+    return false;
+  }
+  return PRICE_LINE_REGEX.test(trimmed.replace(/[^\d$.]/g, ''));
+}
+
+function isLikelyItemLine(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (isPriceLine(trimmed)) {
+    return false;
+  }
+
+  if (/\b(scan|qr|download|app|order|pickup|wait|go2pik\.com)\b/i.test(trimmed)) {
+    return false;
+  }
+
+  const hasLetters = /[A-Za-z]/.test(trimmed);
+  const hasDigits = /\d/.test(trimmed);
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+
+  return hasLetters && !hasDigits && wordCount >= 1;
+}
+
 function hasLikelyCategoryItemPattern(line) {
   const trimmed = String(line || '').trim();
   if (!trimmed) {
@@ -56,6 +86,30 @@ function findLikelyMenuItemLines(text) {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .filter((line) => hasLikelyCategoryItemPattern(line));
+}
+
+function findLikelyMenuItemPairs(text) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const pairs = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = lines[index];
+    const next = lines[index + 1] || '';
+
+    if (hasLikelyCategoryItemPattern(current)) {
+      pairs.push(current);
+      continue;
+    }
+
+    if (isLikelyItemLine(current) && isPriceLine(next)) {
+      pairs.push(`${current} ${next}`.trim());
+    }
+  }
+
+  return Array.from(new Set(pairs));
 }
 
 function getNegativeSignals(text) {
@@ -101,7 +155,7 @@ function calculateConfidence({ priceCount, likelyMenuItemLines, negativeReasons 
 function detectMenuContent(rawOcrText) {
   const text = String(rawOcrText || '').trim();
   const priceCount = countPriceMatches(text);
-  const likelyMenuItemLines = findLikelyMenuItemLines(text);
+  const likelyMenuItemLines = findLikelyMenuItemPairs(text);
   const negativeReasons = getNegativeSignals(text);
   const reasons = [];
 
