@@ -246,11 +246,18 @@ GET /api/dashboard/restaurants/12/reports/orders?from=2026-04-01&to=2026-04-20
 ### OTP Flow
 
 1. `POST /api/orders/verification/start`
-   - Body: same order draft you would normally send to `POST /api/orders`, plus `smsConsent`
+   - Body:
+     ```json
+     {
+       "phoneNumber": "+15105550123",
+       "smsConsent": true
+     }
+     ```
+   - The full order draft can be included alongside `phoneNumber` and `smsConsent`
    - If `smsConsent=true`: sends OTP and returns `{ success, message, verification }`
    - If `smsConsent=false`: skips OTP, creates the order, and returns `{ success, message, order }`
 2. `POST /api/orders`
-   - Body: same order draft with `smsConsent=false`
+   - Body includes `phoneNumber` and `smsConsent=false`
    - Response: `{ success, message, order }`
 3. `POST /api/orders/verification/confirm`
    - Body: `{ verificationId, code }`
@@ -268,6 +275,7 @@ GET /api/dashboard/restaurants/12/reports/orders?from=2026-04-01&to=2026-04-20
 
 ### SMS Consent Fields
 
+- `phoneNumber: string`
 - `smsConsent: true | false`
 - Optional consent audit fields:
   - `smsConsentText`
