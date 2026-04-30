@@ -152,6 +152,8 @@ async function startOrderVerification(payload = {}) {
       order: order.order || order,
       automation: order.automation || null,
       notification: order.notification || null,
+      smsNotification: order.smsNotification || null,
+      notifications: order.notifications || null,
     };
   }
   ensureVerificationConfig();
@@ -423,6 +425,8 @@ async function confirmOrderVerification(sessionId, code) {
       order: order.order || order,
       automation: order.automation || null,
       notification: order.notification || null,
+      smsNotification: order.smsNotification || null,
+      notifications: order.notifications || null,
     };
   } catch (error) {
     await updateVerificationSession(session.id, { status: 'pending' });

@@ -40,23 +40,27 @@ const partialAcceptOrder = asyncHandler(async (req, res) => {
 });
 
 const acceptOrder = asyncHandler(async (req, res) => {
-  const order = await updateStatus(req.params.orderId, 'accepted');
-  res.json({ success: true, order });
+  const result = await updateStatus(req.params.orderId, 'accepted');
+  res.json({ success: true, order: result.order, notification: result.notification || null });
 });
 
 const markPreparing = asyncHandler(async (req, res) => {
-  const order = await updateStatus(req.params.orderId, 'preparing');
-  res.json({ success: true, order });
+  const result = await updateStatus(req.params.orderId, 'preparing');
+  res.json({ success: true, order: result.order, notification: result.notification || null });
 });
 
 const markReady = asyncHandler(async (req, res) => {
-  const order = await updateStatus(req.params.orderId, 'ready_for_pickup');
-  res.json({ success: true, order });
+  const result = await updateStatus(req.params.orderId, 'ready_for_pickup');
+  res.json({
+    success: true,
+    order: result.order,
+    notification: result.notification || null,
+  });
 });
 
 const completeOrder = asyncHandler(async (req, res) => {
-  const order = await updateStatus(req.params.orderId, 'completed');
-  res.json({ success: true, order });
+  const result = await updateStatus(req.params.orderId, 'completed');
+  res.json({ success: true, order: result.order, notification: result.notification || null });
 });
 
 const rejectOrder = asyncHandler(async (req, res) => {
@@ -64,8 +68,8 @@ const rejectOrder = asyncHandler(async (req, res) => {
   if (!rejectReason) {
     throw ApiError.badRequest('reject_reason is required');
   }
-  const order = await updateStatus(req.params.orderId, 'rejected', { rejectionReason: rejectReason });
-  res.json({ success: true, order });
+  const result = await updateStatus(req.params.orderId, 'rejected', { rejectionReason: rejectReason });
+  res.json({ success: true, order: result.order, notification: result.notification || null });
 });
 
 module.exports = {

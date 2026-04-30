@@ -31,6 +31,8 @@ const createOrderController = asyncHandler(async (req, res) => {
     order: result.order,
     automation: result.automation,
     notification: result.notification,
+    smsNotification: result.smsNotification || null,
+    notifications: result.notifications || null,
   });
 });
 

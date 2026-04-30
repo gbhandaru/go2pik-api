@@ -240,7 +240,7 @@ GET /api/dashboard/restaurants/12/reports/orders?from=2026-04-01&to=2026-04-20
 - Token handling (access + refresh) is implemented locally via `src/utils/token.js` with DB persistence/fallback memory store in `src/repositories/tokenRepository.js`.
 - Order placement triggers a stub automation (`src/utils/automation.js`) that can be extended to real browser automation later.
 - Error handling is centralized (`src/middlewares/errorHandler.js`) to normalize responses and surface validation issues.
-- Order confirmations can trigger email notifications. Configure the provider via the `NOTIFICATIONS_*` env vars and the API will POST to your provider from `src/services/notificationService.js` after a successful order.
+- Order confirmations can trigger email and SMS notifications. Configure the provider via the `NOTIFICATIONS_*` env vars and Twilio via `TWILIO_*`; the API will send the confirmation email and, when the customer has opted in, an SMS from `src/services/notificationService.js` after a successful order.
 - OTP verification is handled through Twilio SMS for opted-in users only. The service uses `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` plus the OTP timing values above to manage pending order verification sessions before the final order is created.
 
 ### OTP Flow

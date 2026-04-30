@@ -1,11 +1,15 @@
 const ApiError = require('../utils/errors');
 const config = require('../config/env');
 const { formatUsd } = require('../utils/currency');
-const { sendPartialAcceptanceSms } = require('./notificationService');
+const {
+  sendPartialAcceptanceSms,
+  sendReadyForPickupSms,
+} = require('./notificationService');
 const {
   listOrdersForRestaurant,
   listOrdersForRestaurantReport,
   partiallyAcceptOrder,
+  getOrderById: fetchOrderById,
   updateOrderStatus,
 } = require('../repositories/orderRepository');
 
@@ -468,12 +472,40 @@ function buildStatusUpdate(nextStatus, options = {}) {
 }
 
 async function updateStatus(orderId, nextStatus, options = {}) {
+  const previousOrder = nextStatus === 'ready_for_pickup' ? await fetchOrderById(orderId) : null;
   const updates = buildStatusUpdate(nextStatus, options);
   const row = await updateOrderStatus(orderId, updates);
   if (!row) {
     throw ApiError.notFound('Order not found');
   }
-  return decorateOrder(mapOrder(row));
+  const order = decorateOrder(mapOrder(await fetchOrderById(orderId)));
+  let notification = { delivered: false, skipped: true, reason: 'not_attempted' };
+  if (
+    nextStatus === 'ready_for_pickup' &&
+    String(previousOrder?.status || '').toLowerCase() !== 'ready_for_pickup'
+  ) {
+    try {
+      notification = await sendReadyForPickupSms(order);
+    } catch (error) {
+      notification = {
+        delivered: false,
+        skipped: false,
+        reason: 'provider_error',
+        error: error.message,
+      };
+      console.error('[dashboardService] ready SMS failed', {
+        orderId,
+        orderNumber: order.orderNumber,
+        error: error.message,
+        responseBody: error.responseBody,
+        statusCode: error.statusCode,
+      });
+    }
+  }
+  return {
+    order,
+    notification,
+  };
 }
 
 module.exports = {

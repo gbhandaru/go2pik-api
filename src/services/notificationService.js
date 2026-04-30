@@ -169,6 +169,16 @@ function buildOrderEmail(order) {
   return { subject, textBody, htmlBody };
 }
 
+function buildOrderConfirmationSms(order) {
+  const restaurantName = order.restaurant?.name || 'Go2Pik';
+  return `Order received from ${restaurantName}. We will notify you when it's ready.`;
+}
+
+function buildReadyForPickupSms(order) {
+  const restaurantName = order.restaurant?.name || 'Go2Pik';
+  return `Your order from ${restaurantName} is ready for pickup. Skip the wait with Go2Pik.`;
+}
+
 function buildWelcomeEmail(customer = {}) {
   const name = customer.name || customer.full_name || 'there';
   const subject = 'Welcome to Go2Pik!';
@@ -432,8 +442,156 @@ async function sendOrderConfirmationEmail(order) {
   }
 }
 
+async function sendOrderConfirmationSms(order) {
+  console.log('[notification] sendOrderConfirmationSms called', {
+    orderNumber: order?.orderNumber,
+    customerPhone: order?.customer?.phone,
+  });
+  const rawPhone = order?.smsConsentPhone || order?.customer?.phone || '';
+  const normalizedPhone = normalizePhoneNumber(rawPhone);
+  if (!order?.smsConsent) {
+    console.log('[notification] skipping confirmation SMS: customer did not opt in', {
+      orderNumber: order?.orderNumber,
+    });
+    return { delivered: false, reason: 'sms_consent_not_granted' };
+  }
+  if (!normalizedPhone) {
+    console.log('[notification] skipping confirmation SMS: missing customer phone', {
+      orderNumber: order?.orderNumber,
+    });
+    return { delivered: false, reason: 'missing_customer_phone' };
+  }
+  if (!isE164PhoneNumber(normalizedPhone)) {
+    console.log('[notification] skipping confirmation SMS: invalid phone format', {
+      orderNumber: order?.orderNumber,
+      phone: normalizedPhone,
+    });
+    return { delivered: false, reason: 'invalid_customer_phone_format', phone: normalizedPhone };
+  }
+  if (!isSmsConfigured()) {
+    console.log('[notification] skipping confirmation SMS: Twilio not configured', {
+      orderNumber: order?.orderNumber,
+    });
+    return { delivered: false, reason: 'not_configured' };
+  }
+
+  const body = buildOrderConfirmationSms({
+    ...order,
+    customer: {
+      ...(order.customer || {}),
+      phone: normalizedPhone,
+    },
+  });
+
+  try {
+    const result = await sendSms({
+      to: normalizedPhone,
+      body,
+    });
+    console.log('[notification] order confirmation SMS delivered', {
+      orderNumber: order?.orderNumber,
+      to: normalizedPhone,
+      messageSid: result?.sid || null,
+    });
+    return {
+      delivered: true,
+      reason: null,
+      messageSid: result?.sid || null,
+      body,
+    };
+  } catch (error) {
+    console.error('[notification] confirmation SMS failed', {
+      orderNumber: order?.orderNumber,
+      phone: normalizedPhone,
+      error: error.message,
+      responseBody: error.responseBody,
+      statusCode: error.statusCode,
+    });
+    return {
+      delivered: false,
+      reason: 'provider_error',
+      error: error.message,
+    };
+  }
+}
+
+async function sendReadyForPickupSms(order) {
+  console.log('[notification] sendReadyForPickupSms called', {
+    orderNumber: order?.orderNumber,
+    customerPhone: order?.customer?.phone,
+  });
+  const rawPhone = order?.smsConsentPhone || order?.customer?.phone || '';
+  const normalizedPhone = normalizePhoneNumber(rawPhone);
+  if (!order?.smsConsent) {
+    console.log('[notification] skipping ready SMS: customer did not opt in', {
+      orderNumber: order?.orderNumber,
+    });
+    return { delivered: false, reason: 'sms_consent_not_granted' };
+  }
+  if (!normalizedPhone) {
+    console.log('[notification] skipping ready SMS: missing customer phone', {
+      orderNumber: order?.orderNumber,
+    });
+    return { delivered: false, reason: 'missing_customer_phone' };
+  }
+  if (!isE164PhoneNumber(normalizedPhone)) {
+    console.log('[notification] skipping ready SMS: invalid phone format', {
+      orderNumber: order?.orderNumber,
+      phone: normalizedPhone,
+    });
+    return { delivered: false, reason: 'invalid_customer_phone_format', phone: normalizedPhone };
+  }
+  if (!isSmsConfigured()) {
+    console.log('[notification] skipping ready SMS: Twilio not configured', {
+      orderNumber: order?.orderNumber,
+    });
+    return { delivered: false, reason: 'not_configured' };
+  }
+
+  const body = buildReadyForPickupSms({
+    ...order,
+    customer: {
+      ...(order.customer || {}),
+      phone: normalizedPhone,
+    },
+  });
+
+  try {
+    const result = await sendSms({
+      to: normalizedPhone,
+      body,
+    });
+    console.log('[notification] ready SMS delivered', {
+      orderNumber: order?.orderNumber,
+      to: normalizedPhone,
+      messageSid: result?.sid || null,
+    });
+    return {
+      delivered: true,
+      reason: null,
+      messageSid: result?.sid || null,
+      body,
+    };
+  } catch (error) {
+    console.error('[notification] ready SMS failed', {
+      orderNumber: order?.orderNumber,
+      phone: normalizedPhone,
+      error: error.message,
+      responseBody: error.responseBody,
+      statusCode: error.statusCode,
+    });
+    return {
+      delivered: false,
+      reason: 'provider_error',
+      error: error.message,
+    };
+  }
+}
+
 module.exports = {
   sendOrderConfirmationEmail,
+  sendOrderConfirmationSms,
+  sendReadyForPickupSms,
   isEmailConfigured,
   isSmsConfigured,
   buildOrderReviewLink,

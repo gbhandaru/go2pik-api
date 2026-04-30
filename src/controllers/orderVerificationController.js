@@ -51,6 +51,8 @@ const start = asyncHandler(async (req, res) => {
     order: result.order || null,
     automation: result.automation || null,
     notification: result.notification || null,
+    smsNotification: result.smsNotification || null,
+    notifications: result.notifications || null,
     twilioVerification: result.twilioVerification || null,
   });
 });
@@ -65,6 +67,8 @@ const confirm = asyncHandler(async (req, res) => {
     order: result.order,
     automation: result.automation,
     notification: result.notification,
+    smsNotification: result.smsNotification || null,
+    notifications: result.notifications || null,
   });
 });
 

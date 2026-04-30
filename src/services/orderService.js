@@ -6,7 +6,10 @@ const { normalizePhoneNumber } = require('../utils/phone');
 const { normalizePromoCode, validatePromotion } = require('./promotions.service');
 const { getRestaurantById } = require('./restaurantService');
 const { findCustomerById } = require('./customerService');
-const { sendOrderConfirmationEmail } = require('./notificationService');
+const {
+  sendOrderConfirmationEmail,
+  sendOrderConfirmationSms,
+} = require('./notificationService');
 const { validateScheduledPickupTime } = require('../utils/pickupHours');
 const {
   createOrder: createOrderRecord,
@@ -221,13 +224,22 @@ async function createOrder(payload = {}) {
     orderId,
     orderNumber: persisted.orderNumber,
     customerEmail: persisted.customer?.email,
+    customerPhone: persisted.customer?.phone,
     notificationsProvider: config.notifications.provider,
   });
-  const notification = await sendOrderConfirmationEmail(notificationOrder);
+  const [emailNotification, smsNotification] = await Promise.all([
+    sendOrderConfirmationEmail(notificationOrder),
+    sendOrderConfirmationSms(notificationOrder),
+  ]);
   return {
     order: persisted,
     automation: automationResult,
-    notification,
+    notification: emailNotification,
+    smsNotification,
+    notifications: {
+      email: emailNotification,
+      sms: smsNotification,
+    },
   };
 }
 
