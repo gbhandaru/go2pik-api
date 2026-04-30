@@ -488,6 +488,11 @@ async function sendOrderConfirmationSms(order) {
       to: normalizedPhone,
       body,
     });
+    console.log('[notification] order confirmation SMS sent successfully', {
+      orderNumber: order?.orderNumber,
+      to: normalizedPhone,
+      messageSid: result?.sid || null,
+    });
     console.log('[notification] order confirmation SMS delivered', {
       orderNumber: order?.orderNumber,
       to: normalizedPhone,
