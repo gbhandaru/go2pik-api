@@ -51,6 +51,7 @@ function buildConfig() {
       accountSid: 'AC123',
       authToken: 'auth-token',
       verifyServiceSid: 'VA123',
+      requestTimeoutMs: 50,
     },
     verification: {
       otpExpiryMinutes: 10,
@@ -62,6 +63,51 @@ function buildConfig() {
     },
   };
 }
+
+test('testOrderVerificationService times out when the Twilio Verify service fetch hangs', async () => {
+  const { service, restore } = loadService({
+    config: buildConfig(),
+    twilioSmsService: {
+      getTwilioClient() {
+        return {
+          verify: {
+            v2: {
+              services() {
+                return {
+                  fetch: () => new Promise(() => {}),
+                  verifications: {
+                    create: async () => ({ sid: 'unused' }),
+                  },
+                };
+              },
+            },
+          },
+        };
+      },
+    },
+    orderService: {
+      createOrder: async () => null,
+      getOrderById: async () => null,
+      getOrderByNumber: async () => null,
+      prepareOrderDraft: async () => ({ restaurantId: 12 }),
+    },
+    verificationRepository: {
+      createVerificationSession: async () => null,
+      getVerificationSessionById: async () => null,
+      claimVerificationSessionForProcessing: async () => null,
+      updateVerificationSession: async () => null,
+    },
+  });
+
+  try {
+    await assert.rejects(
+      service.testOrderVerificationService({ phone: '+15105550123' }),
+      (error) => error.code === 'ETIMEDOUT' && error.status === 504
+    );
+  } finally {
+    restore();
+  }
+});
 
 test('confirmOrderVerification returns the existing order for consumed sessions', async () => {
   const createOrderCalls = [];
@@ -137,6 +183,83 @@ test('confirmOrderVerification returns the existing order for consumed sessions'
     assert.equal(result.verification.status, 'consumed');
     assert.equal(createOrderCalls.length, 0);
     assert.equal(claimCalls.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('startOrderVerification keeps the session pending when Twilio Verify send times out', async () => {
+  const createOrderCalls = [];
+  const updateCalls = [];
+  const { service, restore } = loadService({
+    config: buildConfig(),
+    twilioSmsService: {
+      getTwilioClient() {
+        return {
+          verify: {
+            v2: {
+              services() {
+                return {
+                  fetch: async () => ({ sid: 'VA123' }),
+                  verifications: {
+                    create: () => new Promise(() => {}),
+                  },
+                };
+              },
+            },
+          },
+        };
+      },
+    },
+    orderService: {
+      createOrder: async (payload) => {
+        createOrderCalls.push(payload);
+        return null;
+      },
+      getOrderById: async () => null,
+      getOrderByNumber: async () => null,
+      prepareOrderDraft: async () => ({
+        restaurantId: 12,
+        customer: {
+          phone: '+15105550124',
+          name: 'Guest',
+        },
+        items: [{ id: 1, name: 'Samosa', quantity: 1, price: 5, lineTotal: 5 }],
+        pickupType: 'ASAP',
+      }),
+    },
+    verificationRepository: {
+      createVerificationSession: async (fields) => ({
+        id: 'verification-timeout-start',
+        status: fields.status,
+        maskedPhone: fields.maskedPhone,
+        customerPhone: fields.customerPhone,
+      }),
+      getVerificationSessionById: async () => null,
+      claimVerificationSessionForProcessing: async () => null,
+      updateVerificationSession: async (id, fields) => {
+        updateCalls.push({ id, fields });
+        return { id, status: fields.status };
+      },
+    },
+  });
+
+  try {
+    await assert.rejects(
+      service.startOrderVerification({
+        smsConsent: true,
+        customer: {
+          phone: '+15105550124',
+          name: 'Guest',
+        },
+        restaurantId: 12,
+        items: [{ name: 'Samosa', quantity: 1 }],
+      }),
+      (error) => error.code === 'ETIMEDOUT'
+    );
+    assert.equal(createOrderCalls.length, 0);
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0].fields.status, 'pending');
   } finally {
     restore();
   }
@@ -241,6 +364,97 @@ test('confirmOrderVerification stores the created order reference before consumi
     assert.equal(updateCalls[0].fields.order_id, 77);
     assert.equal(updateCalls[0].fields.order_number, 'R12-00077');
     assert.ok(updateCalls[0].fields.verified_at instanceof Date);
+  } finally {
+    restore();
+  }
+});
+
+test('confirmOrderVerification restores the session to pending when Twilio Verify check times out', async () => {
+  const updateCalls = [];
+  const pendingSession = {
+    id: 'verification-timeout-confirm',
+    status: 'pending',
+    customerName: 'Guest',
+    phone: '+15105550126',
+    customerPhone: '+15105550126',
+    restaurantId: 12,
+    pickupType: 'ASAP',
+    pickupTime: null,
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    resendAvailableAt: new Date(Date.now() + 30_000).toISOString(),
+    attemptCount: 0,
+    maxAttempts: 5,
+    verifiedAt: null,
+    orderId: null,
+    orderNumber: null,
+    pendingOrderPayload: {
+      restaurantId: 12,
+      customer: { phone: '+15105550126' },
+      items: [{ id: 1, name: 'Samosa', quantity: 1, price: 5, lineTotal: 5 }],
+    },
+  };
+
+  const { service, restore } = loadService({
+    config: buildConfig(),
+    twilioSmsService: {
+      getTwilioClient() {
+        return {
+          verify: {
+            v2: {
+              services() {
+                return {
+                  fetch: async () => ({ sid: 'VA123' }),
+                  verificationChecks: {
+                    create: () => new Promise(() => {}),
+                  },
+                };
+              },
+            },
+          },
+        };
+      },
+    },
+    orderService: {
+      createOrder: async () => ({
+        order: {
+          id: 88,
+          orderNumber: 'R12-00088',
+          restaurant: { id: 12 },
+          customer: { phone: '+15105550126' },
+        },
+        automation: { ran: true },
+        notification: { delivered: true },
+        smsNotification: { delivered: false },
+        notifications: { email: {}, sms: {} },
+      }),
+      getOrderById: async (orderId) => ({ id: orderId, orderNumber: 'R12-00088', restaurant: { id: 12 } }),
+      getOrderByNumber: async (orderNumber) => ({ id: 88, orderNumber, restaurant: { id: 12 } }),
+      prepareOrderDraft: async () => ({ restaurantId: 12 }),
+    },
+    verificationRepository: {
+      createVerificationSession: async () => null,
+      getVerificationSessionById: async () => pendingSession,
+      claimVerificationSessionForProcessing: async () => ({ ...pendingSession, status: 'processing' }),
+      updateVerificationSession: async (id, fields) => {
+        updateCalls.push({ id, fields });
+        return {
+          ...pendingSession,
+          status: fields.status || pendingSession.status,
+          verifiedAt: fields.verified_at || pendingSession.verifiedAt,
+          orderId: fields.order_id ?? pendingSession.orderId,
+          orderNumber: fields.order_number ?? pendingSession.orderNumber,
+        };
+      },
+    },
+  });
+
+  try {
+    await assert.rejects(
+      service.confirmOrderVerification('verification-timeout-confirm', '123456'),
+      (error) => error.code === 'ETIMEDOUT'
+    );
+    assert.equal(updateCalls.length, 1);
+    assert.equal(updateCalls[0].fields.status, 'pending');
   } finally {
     restore();
   }
