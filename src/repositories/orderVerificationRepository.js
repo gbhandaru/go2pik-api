@@ -57,6 +57,8 @@ function mapVerification(row) {
     expiresAt: row.expires_at,
     resendAvailableAt: row.resend_available_at,
     verifiedAt: row.verified_at,
+    orderId: row.order_id === null || row.order_id === undefined ? null : Number(row.order_id),
+    orderNumber: row.order_number || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -72,28 +74,34 @@ function normalizePickupType(value) {
 
 async function createVerificationSession(fields) {
   const payloadColumns = await getOrderVerificationPayloadColumnInfo();
-  const targetColumns = [
-    'customer_name',
-    'phone',
-    'masked_phone',
-    'customer_phone',
-    'customer_email',
-    'restaurant_id',
-    'pickup_type',
-    'pickup_time',
-    'status',
-    'attempt_count',
-    'max_attempts',
-    'expires_at',
-    'resend_available_at',
-    'verified_at',
-  ];
+  const targetColumns = [];
+  const values = [];
+  const pushColumn = (column, value) => {
+    targetColumns.push(column);
+    values.push(value);
+  };
+  const payloadValue = JSON.stringify(fields.pendingOrderPayload || {});
+
+  pushColumn('customer_name', fields.customerName || 'Guest');
+  pushColumn('phone', fields.phone);
+  pushColumn('masked_phone', fields.maskedPhone || null);
+  pushColumn('customer_phone', fields.customerPhone || fields.phone || null);
+  pushColumn('customer_email', fields.customerEmail || null);
+  pushColumn('restaurant_id', fields.restaurantId);
+  pushColumn('pickup_type', normalizePickupType(fields.pickupType));
+  pushColumn('pickup_time', fields.pickupTime || null);
   if (payloadColumns.hasOrderPayload) {
-    targetColumns.splice(8, 0, 'order_payload');
+    pushColumn('order_payload', payloadValue);
   }
   if (payloadColumns.hasPendingOrderPayload) {
-    targetColumns.splice(targetColumns.indexOf('status'), 0, 'pending_order_payload');
+    pushColumn('pending_order_payload', payloadValue);
   }
+  pushColumn('status', fields.status || 'pending');
+  pushColumn('attempt_count', fields.attemptCount || 0);
+  pushColumn('max_attempts', fields.maxAttempts || 0);
+  pushColumn('expires_at', fields.expiresAt);
+  pushColumn('resend_available_at', fields.resendAvailableAt);
+  pushColumn('verified_at', fields.verifiedAt || null);
   const query = `
     INSERT INTO order_verifications (
       ${targetColumns.join(', ')}
@@ -101,29 +109,6 @@ async function createVerificationSession(fields) {
     VALUES (${targetColumns.map((_, index) => `$${index + 1}`).join(', ')})
     RETURNING *;
   `;
-  const values = [
-    fields.customerName || 'Guest',
-    fields.phone,
-    fields.maskedPhone || null,
-    fields.customerPhone || fields.phone || null,
-    fields.customerEmail || null,
-    fields.restaurantId,
-    normalizePickupType(fields.pickupType),
-    fields.pickupTime || null,
-    fields.status || 'pending',
-    fields.attemptCount || 0,
-    fields.maxAttempts || 0,
-    fields.expiresAt,
-    fields.resendAvailableAt,
-    fields.verifiedAt || null,
-  ];
-  const payloadValue = JSON.stringify(fields.pendingOrderPayload || {});
-  if (payloadColumns.hasOrderPayload) {
-    values.splice(8, 0, payloadValue);
-  }
-  if (payloadColumns.hasPendingOrderPayload) {
-    values.splice(values.indexOf(fields.status || 'pending'), 0, payloadValue);
-  }
   assertInsertArity('Order verification session', targetColumns, values);
   try {
     const { rows } = await pool.query(query, values);
@@ -146,6 +131,19 @@ async function getVerificationSessionById(id) {
     FROM order_verifications
     WHERE verification_id = $1
     LIMIT 1;
+  `;
+  const { rows } = await pool.query(query, [id]);
+  return mapVerification(rows[0]);
+}
+
+async function claimVerificationSessionForProcessing(id) {
+  const query = `
+    UPDATE order_verifications
+    SET status = 'processing',
+        updated_at = now()
+    WHERE verification_id = $1
+      AND LOWER(status) = 'pending'
+    RETURNING *;
   `;
   const { rows } = await pool.query(query, [id]);
   return mapVerification(rows[0]);
@@ -191,6 +189,7 @@ async function updateVerificationSession(id, fields = {}) {
 module.exports = {
   createVerificationSession,
   getVerificationSessionById,
+  claimVerificationSessionForProcessing,
   updateVerificationSession,
   mapVerification,
 };

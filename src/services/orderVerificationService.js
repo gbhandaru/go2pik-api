@@ -2,8 +2,18 @@ const ApiError = require('../utils/errors');
 const config = require('../config/env');
 const { getTwilioClient } = require('./twilioSmsService');
 const { normalizePhoneNumber, maskPhoneNumber } = require('../utils/phone');
-const { createVerificationSession, getVerificationSessionById, updateVerificationSession } = require('../repositories/orderVerificationRepository');
-const { createOrder, prepareOrderDraft } = require('./orderService');
+const {
+  createVerificationSession,
+  getVerificationSessionById,
+  claimVerificationSessionForProcessing,
+  updateVerificationSession,
+} = require('../repositories/orderVerificationRepository');
+const {
+  createOrder,
+  getOrderById,
+  getOrderByNumber,
+  prepareOrderDraft,
+} = require('./orderService');
 
 function getExpiryDate() {
   return new Date(Date.now() + Number(config.verification.otpExpiryMinutes || 10) * 60 * 1000);
@@ -76,6 +86,31 @@ function toSessionResponse(session) {
     verifiedAt: session.verifiedAt,
     twilioVerificationSid: session.twilioVerificationSid || null,
   };
+}
+
+async function resolveOrderForVerificationSession(session) {
+  if (!session) {
+    return null;
+  }
+  if (session.orderId) {
+    try {
+      return await getOrderById(session.orderId);
+    } catch (error) {
+      if (!error || error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+  if (session.orderNumber) {
+    try {
+      return await getOrderByNumber(session.orderNumber);
+    } catch (error) {
+      if (!error || error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+  return null;
 }
 
 function ensureVerificationConfig() {
@@ -328,6 +363,17 @@ async function confirmOrderVerification(sessionId, code) {
   if (!session) {
     throw ApiError.notFound('Verification session not found');
   }
+  const completedOrder = await resolveOrderForVerificationSession(session);
+  if (completedOrder && (session.status === 'consumed' || session.status === 'processing')) {
+    return {
+      verification: toSessionResponse(session),
+      order: completedOrder,
+      automation: null,
+      notification: null,
+      smsNotification: null,
+      notifications: null,
+    };
+  }
   if (session.status === 'consumed') {
     throw ApiError.conflict('Verification session has already been consumed');
   }
@@ -349,7 +395,31 @@ async function confirmOrderVerification(sessionId, code) {
     throw ApiError.badRequest('code is required');
   }
 
-  await updateVerificationSession(session.id, { status: 'processing' });
+  const claimedSession = await claimVerificationSessionForProcessing(session.id);
+  if (!claimedSession) {
+    const refreshed = await getVerificationSessionById(session.id);
+    const existingOrder = await resolveOrderForVerificationSession(refreshed);
+    if (existingOrder && (refreshed?.status === 'consumed' || refreshed?.status === 'processing')) {
+      return {
+        verification: toSessionResponse(refreshed),
+        order: existingOrder,
+        automation: null,
+        notification: null,
+        smsNotification: null,
+        notifications: null,
+      };
+    }
+    if (refreshed?.status === 'processing') {
+      throw ApiError.conflict('Verification is already being processed');
+    }
+    if (refreshed?.status === 'consumed') {
+      throw ApiError.conflict('Verification session has already been consumed');
+    }
+    if (refreshed?.status === 'failed') {
+      throw ApiError.badRequest('Verification session has failed');
+    }
+    throw ApiError.conflict('Verification session could not be claimed');
+  }
 
   try {
     const check = await getVerifyService().verificationChecks.create({
@@ -413,23 +483,54 @@ async function confirmOrderVerification(sessionId, code) {
     restaurantId: session.restaurantId,
   });
 
+  let order;
   try {
-    const order = await createOrder(session.pendingOrderPayload || {});
+    order = await createOrder(session.pendingOrderPayload || {});
+  } catch (error) {
+    await updateVerificationSession(session.id, { status: 'pending' });
+    throw error;
+  }
+
+  const createdOrder = order.order || order;
+  try {
     const completed = await updateVerificationSession(session.id, {
       status: 'consumed',
       verified_at: new Date(),
+      order_id: createdOrder.id,
+      order_number: createdOrder.orderNumber,
     });
 
     return {
       verification: toSessionResponse(completed),
-      order: order.order || order,
+      order: createdOrder,
       automation: order.automation || null,
       notification: order.notification || null,
       smsNotification: order.smsNotification || null,
       notifications: order.notifications || null,
     };
   } catch (error) {
-    await updateVerificationSession(session.id, { status: 'pending' });
+    try {
+      const failed = await updateVerificationSession(session.id, {
+        status: 'failed',
+        verified_at: new Date(),
+        order_id: createdOrder.id,
+        order_number: createdOrder.orderNumber,
+      });
+      console.warn('[orderVerificationService] final verification update failed after order creation', {
+        sessionId: session.id,
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
+        sessionStatus: failed?.status || 'failed',
+      });
+    } catch (recoveryError) {
+      console.error('[orderVerificationService] failed to persist order reference after confirmation', {
+        sessionId: session.id,
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
+        code: recoveryError?.code,
+        message: recoveryError?.message,
+      });
+    }
     throw error;
   }
 }

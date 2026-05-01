@@ -12,6 +12,10 @@ const {
 } = require('./notificationService');
 const { validateScheduledPickupTime } = require('../utils/pickupHours');
 const {
+  buildOrderRequestFingerprint,
+  createRecentResultCache,
+} = require('../utils/orderIdempotency');
+const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
   getOrderByOrderNumber: fetchOrderByOrderNumber,
@@ -30,6 +34,11 @@ const SUPPORTED_ORDER_STATUSES = new Set([
   'rejected',
   'cancelled',
 ]);
+
+const orderCreationCache = createRecentResultCache({
+  ttlMs: 2 * 60 * 1000,
+  maxEntries: 256,
+});
 
 function deriveEmailFromCustomer(customer = {}) {
   const candidates = [customer.email, customer.username, customer.name];
@@ -57,8 +66,15 @@ function normalizeMenuItems(items, restaurant) {
       const missingLabel = item.name || item.sku || 'unknown item';
       throw ApiError.badRequest(`${missingLabel} is not on ${restaurant.name}'s menu`);
     }
+    if (menuItem.is_available === false || menuItem.isAvailable === false) {
+      const unavailableLabel = item.name || item.sku || menuItem.name || 'unknown item';
+      throw ApiError.badRequest(`${unavailableLabel} is currently unavailable`);
+    }
     const quantity = Math.max(1, Number(item.quantity) || 1);
     const price = Number(menuItem.price);
+    if (!Number.isFinite(price)) {
+      throw ApiError.badRequest(`${menuItem.name || item.name || 'Item'} has an invalid price`);
+    }
     const lineTotal = Number((quantity * price).toFixed(2));
     return {
       id: menuItem.id,
@@ -173,6 +189,11 @@ function formatOrderAmounts(order) {
 
 async function createOrder(payload = {}) {
   const draft = await prepareOrderDraft(payload);
+  const fingerprint = buildOrderRequestFingerprint(draft);
+  return orderCreationCache.run(fingerprint, () => createOrderWithoutDedup(draft, payload));
+}
+
+async function createOrderWithoutDedup(draft, payload = {}) {
   const { restaurant, customer, items, totals } = draft;
   const { subtotal, tax, total } = totals;
   let promotion = null;
