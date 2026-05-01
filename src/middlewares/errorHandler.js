@@ -1,4 +1,5 @@
 const ApiError = require('../utils/errors');
+const { resolveRequestId } = require('../utils/requestId');
 
 function mapDbError(error) {
   if (!error || !error.code) {
@@ -21,8 +22,17 @@ function errorHandler(err, req, res, next) {
   const mapped = mapDbError(err);
   const error = mapped || err;
   const status = error.status || (error?.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
+  const requestId = req?.id || resolveRequestId(req);
   if (status >= 500) {
-    console.error('[error]', err);
+    console.error('[error]', {
+      requestId,
+      method: req?.method || null,
+      path: req?.originalUrl || null,
+      status,
+      code: error.code || null,
+      name: error.name || null,
+      message: error.message || 'Internal server error',
+    });
   }
   if (status === 404) {
     res.status(status).json({

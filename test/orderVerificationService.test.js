@@ -191,6 +191,11 @@ test('confirmOrderVerification returns the existing order for consumed sessions'
 test('startOrderVerification keeps the session pending when Twilio Verify send times out', async () => {
   const createOrderCalls = [];
   const updateCalls = [];
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => {
+    errors.push(args);
+  };
   const { service, restore } = loadService({
     config: buildConfig(),
     twilioSmsService: {
@@ -260,7 +265,14 @@ test('startOrderVerification keeps the session pending when Twilio Verify send t
     assert.equal(createOrderCalls.length, 0);
     assert.equal(updateCalls.length, 1);
     assert.equal(updateCalls[0].fields.status, 'pending');
+    const failureLog = errors.find((entry) =>
+      entry[0] === '[orderVerificationService] failed to send Twilio Verify verification'
+    );
+    assert.ok(failureLog);
+    assert.equal(failureLog[1].failureType, 'timeout');
+    assert.equal(failureLog[1].retryable, true);
   } finally {
+    console.error = originalError;
     restore();
   }
 });

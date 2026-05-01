@@ -105,7 +105,7 @@ test('createOrder only dedupes in-flight duplicate submits and not completed one
       },
       getOrderById: async (id) => ({
         id,
-        orderNumber: `R12-${String(id).padStart(5, '0')}`,
+        order_number: `R12-${String(id).padStart(5, '0')}`,
         customer_name: 'Guest',
         customer_phone: '+15105550123',
         customer_email: 'guest@example.com',
@@ -170,6 +170,115 @@ test('createOrder only dedupes in-flight duplicate submits and not completed one
     assert.equal(createOrderRecordCalls, 2);
     assert.notStrictEqual(third, first);
   } finally {
+    restore();
+  }
+});
+
+test('createOrder emits sanitized lifecycle logs', async () => {
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => {
+    logs.push(args);
+  };
+
+  let createOrderRecordCalls = 0;
+  let orderId = 100;
+
+  const { service, restore } = loadService({
+    config: buildConfig(),
+    restaurantService: {
+      getRestaurantById: async () => buildRestaurant(),
+    },
+    customerService: {
+      findCustomerById: async () => null,
+    },
+    notificationService: {
+      sendOrderConfirmationEmail: async () => ({ delivered: false }),
+      sendOrderConfirmationSms: async () => ({ delivered: false }),
+    },
+    automation: {
+      runOrderAutomation: async () => ({ ran: true }),
+    },
+    orderRepository: {
+      createOrder: async () => {
+        createOrderRecordCalls += 1;
+        orderId += 1;
+        return orderId;
+      },
+      getOrderById: async (id) => ({
+        id,
+        orderNumber: `R12-${String(id).padStart(5, '0')}`,
+        customer_name: 'Guest',
+        customer_phone: '+15105550123',
+        customer_email: 'guest@example.com',
+        restaurant_id: 12,
+        restaurant_name: 'Pik Thai',
+        cuisine_type: 'Thai',
+        city: 'Fremont',
+        state: 'CA',
+        subtotal: 5,
+        tax_amount: 0.4,
+        total_amount: 5,
+        payment_mode: 'pay_at_restaurant',
+        payment_status: 'unpaid',
+        status: 'new',
+        acceptance_mode: 'full',
+        customer_action: 'none',
+        items: JSON.stringify([
+          {
+            id: 1,
+            menuItemId: 1,
+            name: 'Samosa',
+            quantity: 1,
+            price: 5,
+            lineTotal: 5,
+            specialInstructions: null,
+            isAvailable: true,
+          },
+        ]),
+      }),
+      getOrderByOrderNumber: async () => null,
+      listOrders: async () => [],
+      listOrdersForCustomer: async () => [],
+      updateCustomerOrderAction: async () => null,
+    },
+    pickupHours: {
+      validateScheduledPickupTime: () => {},
+    },
+    promotions: {
+      normalizePromoCode: (value) => String(value || '').trim().toUpperCase(),
+      validatePromotion: async () => ({ valid: false, message: 'no promo' }),
+    },
+  });
+
+  try {
+    const order = await service.createOrder({
+      restaurantId: 12,
+      customer: {
+        phone: '+15105550123',
+        name: 'Guest',
+      },
+      items: [{ name: 'Samosa', quantity: 1 }],
+    });
+
+    assert.equal(createOrderRecordCalls, 1);
+
+    const startLog = logs.find((entry) => entry[0] === '[orderService] create order started');
+    const completeLog = logs.find((entry) => entry[0] === '[orderService] create order completed');
+    assert.ok(startLog);
+    assert.ok(completeLog);
+    assert.equal(startLog[1].customerPhonePresent, true);
+    assert.equal(startLog[1].customerEmailPresent, false);
+    assert.equal(Object.prototype.hasOwnProperty.call(startLog[1], 'customerPhone'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(startLog[1], 'customerEmail'), false);
+    assert.equal(JSON.stringify(startLog[1]).includes('+15105550123'), false);
+    assert.equal(JSON.stringify(startLog[1]).includes('guest@example.com'), false);
+    assert.equal(completeLog[1].emailDelivered, false);
+    assert.equal(completeLog[1].smsDelivered, false);
+    assert.equal(Object.prototype.hasOwnProperty.call(completeLog[1], 'customerPhone'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(completeLog[1], 'customerEmail'), false);
+  } finally {
+    console.log = originalLog;
     restore();
   }
 });

@@ -135,6 +135,19 @@ function isRetryableTwilioError(error) {
   return Boolean(error?.retryable || error?.code === 'ETIMEDOUT');
 }
 
+function classifyTwilioFailure(error) {
+  if (error?.code === 'ETIMEDOUT') {
+    return 'timeout';
+  }
+  if (error?.status && error.status < 500) {
+    return 'provider_rejected';
+  }
+  if (isRetryableTwilioError(error)) {
+    return 'retryable';
+  }
+  return 'provider_error';
+}
+
 async function fetchVerifyServiceWithTimeout() {
   return withTimeout(
     () => getVerifyService().fetch(),
@@ -179,7 +192,7 @@ async function testOrderVerificationService(payload = {}) {
     serviceSid: service.sid || null,
     verificationSid: verification.sid || null,
     status: verification.status || null,
-    phone: maskPhoneNumber(phone),
+    customerPhonePresent: Boolean(phone),
   });
   return {
     service,
@@ -232,11 +245,12 @@ async function startOrderVerification(payload = {}) {
   const maskedPhone = maskPhoneNumber(customerPhone);
   console.log('[orderVerificationService] start verification draft prepared', {
     restaurantId: draft.restaurantId,
-    customerPhone: maskedPhone,
+    customerPhonePresent: Boolean(customerPhone),
     customerEmailPresent: Boolean(draft.customer?.email),
     itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
     pickupType: draft.pickupType,
     pickupTimePresent: Boolean(draft.pickupTime),
+    smsConsent: Boolean(consent.smsConsent),
   });
   const session = await createVerificationSession({
     customerName: draft.customer?.name || 'Guest',
@@ -269,9 +283,9 @@ async function startOrderVerification(payload = {}) {
   console.log('[orderVerificationService] verification session created', {
     sessionId: session.id,
     status: session.status,
-    phone: session.maskedPhone || maskedPhone,
+    restaurantId: session.restaurantId,
+    itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
     pickupType: session.pickupType,
-    pickupTime: session.pickupTime,
     expiresAt: session.expiresAt,
     resendAvailableAt: session.resendAvailableAt,
   });
@@ -280,10 +294,9 @@ async function startOrderVerification(payload = {}) {
     const verification = await sendVerificationWithTimeout(customerPhone);
     console.log('[orderVerificationService] Twilio Verify send status', {
       sessionId: session.id,
+      deliveryStage: 'initial',
       verificationSid: verification.sid,
       status: verification.status,
-      to: verification.to,
-      phone: maskedPhone,
     });
     const updated = await updateVerificationSession(session.id, {
       twilio_verification_sid: verification.sid,
@@ -308,7 +321,9 @@ async function startOrderVerification(payload = {}) {
   } catch (error) {
     console.error('[orderVerificationService] failed to send Twilio Verify verification', {
       sessionId: session.id,
-      phone: maskedPhone,
+      deliveryStage: 'initial',
+      failureType: classifyTwilioFailure(error),
+      retryable: isRetryableTwilioError(error),
       code: error?.code,
       status: error?.status,
       message: error?.message,
@@ -355,9 +370,9 @@ async function resendOrderVerification(sessionId) {
     const verification = await sendVerificationWithTimeout(session.customerPhone);
     console.log('[orderVerificationService] Twilio Verify resend status', {
       sessionId: session.id,
+      deliveryStage: 'resend',
       verificationSid: verification.sid,
       status: verification.status,
-      phone: maskPhoneNumber(session.customerPhone),
     });
     const updated = await updateVerificationSession(session.id, {
       twilio_verification_sid: verification.sid,
@@ -379,7 +394,9 @@ async function resendOrderVerification(sessionId) {
   } catch (error) {
     console.error('[orderVerificationService] failed to resend Twilio Verify verification', {
       sessionId: session.id,
-      phone: maskPhoneNumber(session.customerPhone),
+      deliveryStage: 'resend',
+      failureType: classifyTwilioFailure(error),
+      retryable: isRetryableTwilioError(error),
       code: error?.code,
       status: error?.status,
       message: error?.message,
@@ -461,14 +478,12 @@ async function confirmOrderVerification(sessionId, code) {
       sessionId: session.id,
       verificationSid: check.sid || null,
       status: check.status || null,
-      phone: maskPhoneNumber(session.customerPhone),
     });
     if (check.status !== 'approved') {
       const nextAttempts = session.attemptCount + 1;
       const isExhausted = nextAttempts >= session.maxAttempts;
       console.warn('[orderVerificationService] Twilio Verify code rejected', {
         sessionId: session.id,
-        phone: maskPhoneNumber(session.customerPhone),
         attemptCount: nextAttempts,
         maxAttempts: session.maxAttempts,
         twilioStatus: check.status || null,
@@ -488,7 +503,8 @@ async function confirmOrderVerification(sessionId, code) {
     if (isRetryableTwilioError(error)) {
       console.warn('[orderVerificationService] Twilio Verify check timed out or was retryable', {
         sessionId: session.id,
-        phone: maskPhoneNumber(session.customerPhone),
+        failureType: classifyTwilioFailure(error),
+        retryable: true,
         code: error?.code,
         status: error?.status,
         message: error?.message,
@@ -499,7 +515,8 @@ async function confirmOrderVerification(sessionId, code) {
     if (error?.status && error.status < 500) {
       console.warn('[orderVerificationService] Twilio Verify check failed', {
         sessionId: session.id,
-        phone: maskPhoneNumber(session.customerPhone),
+        failureType: classifyTwilioFailure(error),
+        retryable: false,
         code: error?.code,
         status: error?.status,
         message: error?.message,
@@ -521,8 +538,8 @@ async function confirmOrderVerification(sessionId, code) {
 
   console.log('[orderVerificationService] OTP approved, creating final order', {
     sessionId: session.id,
-    phone: maskPhoneNumber(session.customerPhone),
     restaurantId: session.restaurantId,
+    attemptCount: session.attemptCount,
   });
 
   let order;

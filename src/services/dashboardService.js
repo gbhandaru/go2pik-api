@@ -444,6 +444,14 @@ async function partiallyAcceptOrderForRestaurant(orderId, payload = {}) {
       statusCode: error.statusCode,
     });
   }
+  console.log('[dashboardService] partial acceptance completed', {
+    orderId,
+    orderNumber: decoratedOrder.orderNumber,
+    acceptedCount: decoratedOrder.acceptedItems.length,
+    unavailableCount: decoratedOrder.unavailableItems.length,
+    notificationDelivered: notification.delivered === true,
+    notificationReason: notification.reason || null,
+  });
   return {
     order: decoratedOrder,
     notification,
@@ -502,6 +510,13 @@ async function updateStatus(orderId, nextStatus, options = {}) {
       });
     }
   }
+  console.log('[dashboardService] status update completed', {
+    orderId,
+    orderNumber: order.orderNumber,
+    nextStatus,
+    notificationDelivered: notification.delivered === true,
+    notificationReason: notification.reason || null,
+  });
   return {
     order,
     notification,

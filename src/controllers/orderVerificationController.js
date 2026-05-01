@@ -11,6 +11,7 @@ const {
 } = require('../utils/authenticatedCustomer');
 
 const start = asyncHandler(async (req, res) => {
+  const requestId = req.id || null;
   const rawPhone =
     req.body?.customer?.phone ||
     req.body?.phoneNumber ||
@@ -18,27 +19,27 @@ const start = asyncHandler(async (req, res) => {
     req.body?.customerPhone ||
     null;
   console.log('[orderVerificationController] verification start requested', {
+    requestId,
     hasCustomer: Boolean(req.body?.customer),
     hasItems: Array.isArray(req.body?.items),
     restaurantId: req.body?.restaurantId || null,
     smsConsentRaw: req.body?.smsConsent ?? req.body?.smsConsentAccepted ?? req.body?.sms_consent ?? null,
     rawPhonePresent: Boolean(rawPhone),
-    rawPhoneMasked: rawPhone ? `***${String(rawPhone).replace(/\D/g, '').slice(-4)}` : null,
     bodyKeys: Object.keys(req.body || {}),
   });
   const authCustomer = await resolveAuthenticatedCustomer(req);
   const payload = mergeAuthenticatedCustomerPayload(req.body || {}, authCustomer);
   console.log('[orderVerificationController] verification start merged payload', {
+    requestId,
     restaurantId: payload.restaurantId || null,
     customerPhonePresent: Boolean(payload.customer?.phone),
-    customerPhoneMasked: payload.customer?.phone ? `***${String(payload.customer.phone).replace(/\D/g, '').slice(-4)}` : null,
     customerKeys: Object.keys(payload.customer || {}),
   });
   const result = await startOrderVerification(payload);
   console.log('[orderVerificationController] verification start response ready', {
+    requestId,
     verificationId: result?.verification?.id || null,
     status: result?.verification?.status || null,
-    customerPhoneMasked: result?.verification?.maskedPhone || null,
     twilioVerificationSid: result?.verification?.twilioVerificationSid || null,
     expiresAt: result?.verification?.expiresAt || null,
     resendAvailableAt: result?.verification?.resendAvailableAt || null,
@@ -85,10 +86,12 @@ const resend = asyncHandler(async (req, res) => {
 
 const test = asyncHandler(async (req, res) => {
   console.log('[orderVerificationController] Twilio Verify test requested', {
+    requestId: req.id || null,
     hasPhone: Boolean(req.body?.phone || req.body?.customerPhone),
   });
   const result = await testOrderVerificationService(req.body || {});
   console.log('[orderVerificationController] Twilio Verify test result', {
+    requestId: req.id || null,
     hasVerification: Boolean(result.verification),
     serviceSid: result.service?.sid || null,
     otpLength: result.service?.codeLength || null,
