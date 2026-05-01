@@ -162,7 +162,7 @@ async function createOrderRecord({ restaurantId, customer, items, totals, promot
         orderId,
         promotionId: lockedPromotion.id,
         promotionCode: lockedPromotion.promoCode,
-        customerPhone: normalizedCustomerPhone,
+        customerPhonePresent: Boolean(normalizedCustomerPhone),
         discountAmount: appliedDiscountAmount,
         finalAmount: appliedFinalAmount,
       });

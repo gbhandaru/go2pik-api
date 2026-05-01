@@ -168,7 +168,7 @@ async function validatePromotion({
     console.warn('[promotions.service] validation failed: promotion already used by phone', {
       promotionId: promotion.id,
       promoCode: promotion.promoCode,
-      customerPhone: normalizedPhone,
+      customerPhonePresent: true,
     });
     return buildInvalidResult(
       amount,
@@ -221,7 +221,7 @@ async function validatePromotion({
   console.log('[promotions.service] validation success', {
     promotionId: promotion.id,
     promoCode: promotion.promoCode,
-    customerPhone: normalizedPhone,
+    customerPhonePresent: true,
     orderAmount: result.orderAmount,
     discountAmount: result.discountAmount,
     finalAmount: result.finalAmount,

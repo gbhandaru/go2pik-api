@@ -2,8 +2,19 @@ const ApiError = require('../utils/errors');
 const config = require('../config/env');
 const { getTwilioClient } = require('./twilioSmsService');
 const { normalizePhoneNumber, maskPhoneNumber } = require('../utils/phone');
-const { createVerificationSession, getVerificationSessionById, updateVerificationSession } = require('../repositories/orderVerificationRepository');
-const { createOrder, prepareOrderDraft } = require('./orderService');
+const {
+  createVerificationSession,
+  getVerificationSessionById,
+  claimVerificationSessionForProcessing,
+  updateVerificationSession,
+} = require('../repositories/orderVerificationRepository');
+const { withTimeout } = require('../utils/timeout');
+const {
+  createOrder,
+  getOrderById,
+  getOrderByNumber,
+  prepareOrderDraft,
+} = require('./orderService');
 
 function getExpiryDate() {
   return new Date(Date.now() + Number(config.verification.otpExpiryMinutes || 10) * 60 * 1000);
@@ -11,6 +22,10 @@ function getExpiryDate() {
 
 function getResendAvailableDate() {
   return new Date(Date.now() + Number(config.verification.otpResendCooldownSeconds || 30) * 1000);
+}
+
+function getTwilioVerifyTimeoutMs() {
+  return Number(config.twilio?.requestTimeoutMs || 8000);
 }
 
 function normalizeSmsConsent(value) {
@@ -78,6 +93,31 @@ function toSessionResponse(session) {
   };
 }
 
+async function resolveOrderForVerificationSession(session) {
+  if (!session) {
+    return null;
+  }
+  if (session.orderId) {
+    try {
+      return await getOrderById(session.orderId);
+    } catch (error) {
+      if (!error || error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+  if (session.orderNumber) {
+    try {
+      return await getOrderByNumber(session.orderNumber);
+    } catch (error) {
+      if (!error || error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+  return null;
+}
+
 function ensureVerificationConfig() {
   const { accountSid, authToken, verifyServiceSid } = config.twilio || {};
   if (!accountSid || !authToken || !verifyServiceSid) {
@@ -91,8 +131,55 @@ function getVerifyService() {
   return client.verify.v2.services(config.twilio.verifyServiceSid);
 }
 
+function isRetryableTwilioError(error) {
+  return Boolean(error?.retryable || error?.code === 'ETIMEDOUT');
+}
+
+function classifyTwilioFailure(error) {
+  if (error?.code === 'ETIMEDOUT') {
+    return 'timeout';
+  }
+  if (error?.status && error.status < 500) {
+    return 'provider_rejected';
+  }
+  if (isRetryableTwilioError(error)) {
+    return 'retryable';
+  }
+  return 'provider_error';
+}
+
+async function fetchVerifyServiceWithTimeout() {
+  return withTimeout(
+    () => getVerifyService().fetch(),
+    getTwilioVerifyTimeoutMs(),
+    'Twilio Verify service lookup timed out'
+  );
+}
+
+async function sendVerificationWithTimeout(phone) {
+  return withTimeout(
+    () => getVerifyService().verifications.create({
+      to: phone,
+      channel: 'sms',
+    }),
+    getTwilioVerifyTimeoutMs(),
+    'Twilio Verify send timed out'
+  );
+}
+
+async function checkVerificationWithTimeout(phone, code) {
+  return withTimeout(
+    () => getVerifyService().verificationChecks.create({
+      to: phone,
+      code: String(code).trim(),
+    }),
+    getTwilioVerifyTimeoutMs(),
+    'Twilio Verify check timed out'
+  );
+}
+
 async function testOrderVerificationService(payload = {}) {
-  const service = await getVerifyService().fetch();
+  const service = await fetchVerifyServiceWithTimeout();
   const phone = normalizePhoneNumber(payload.phone || payload.customerPhone);
   if (!phone) {
     return {
@@ -100,15 +187,12 @@ async function testOrderVerificationService(payload = {}) {
       verification: null,
     };
   }
-  const verification = await getVerifyService().verifications.create({
-    to: phone,
-    channel: 'sms',
-  });
+  const verification = await sendVerificationWithTimeout(phone);
   console.log('[orderVerificationService] Twilio Verify test send status', {
     serviceSid: service.sid || null,
     verificationSid: verification.sid || null,
     status: verification.status || null,
-    phone: maskPhoneNumber(phone),
+    customerPhonePresent: Boolean(phone),
   });
   return {
     service,
@@ -161,11 +245,12 @@ async function startOrderVerification(payload = {}) {
   const maskedPhone = maskPhoneNumber(customerPhone);
   console.log('[orderVerificationService] start verification draft prepared', {
     restaurantId: draft.restaurantId,
-    customerPhone: maskedPhone,
+    customerPhonePresent: Boolean(customerPhone),
     customerEmailPresent: Boolean(draft.customer?.email),
     itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
     pickupType: draft.pickupType,
     pickupTimePresent: Boolean(draft.pickupTime),
+    smsConsent: Boolean(consent.smsConsent),
   });
   const session = await createVerificationSession({
     customerName: draft.customer?.name || 'Guest',
@@ -198,24 +283,20 @@ async function startOrderVerification(payload = {}) {
   console.log('[orderVerificationService] verification session created', {
     sessionId: session.id,
     status: session.status,
-    phone: session.maskedPhone || maskedPhone,
+    restaurantId: session.restaurantId,
+    itemCount: Array.isArray(draft.items) ? draft.items.length : 0,
     pickupType: session.pickupType,
-    pickupTime: session.pickupTime,
     expiresAt: session.expiresAt,
     resendAvailableAt: session.resendAvailableAt,
   });
 
   try {
-    const verification = await getVerifyService().verifications.create({
-      to: customerPhone,
-      channel: 'sms',
-    });
+    const verification = await sendVerificationWithTimeout(customerPhone);
     console.log('[orderVerificationService] Twilio Verify send status', {
       sessionId: session.id,
+      deliveryStage: 'initial',
       verificationSid: verification.sid,
       status: verification.status,
-      to: verification.to,
-      phone: maskedPhone,
     });
     const updated = await updateVerificationSession(session.id, {
       twilio_verification_sid: verification.sid,
@@ -240,11 +321,17 @@ async function startOrderVerification(payload = {}) {
   } catch (error) {
     console.error('[orderVerificationService] failed to send Twilio Verify verification', {
       sessionId: session.id,
-      phone: maskedPhone,
+      deliveryStage: 'initial',
+      failureType: classifyTwilioFailure(error),
+      retryable: isRetryableTwilioError(error),
       code: error?.code,
       status: error?.status,
       message: error?.message,
     });
+    if (isRetryableTwilioError(error)) {
+      await updateVerificationSession(session.id, { status: 'pending' });
+      throw error;
+    }
     await updateVerificationSession(session.id, { status: 'failed' });
     throw error;
   }
@@ -280,15 +367,12 @@ async function resendOrderVerification(sessionId) {
   }
 
   try {
-    const verification = await getVerifyService().verifications.create({
-      to: session.customerPhone,
-      channel: 'sms',
-    });
+    const verification = await sendVerificationWithTimeout(session.customerPhone);
     console.log('[orderVerificationService] Twilio Verify resend status', {
       sessionId: session.id,
+      deliveryStage: 'resend',
       verificationSid: verification.sid,
       status: verification.status,
-      phone: maskPhoneNumber(session.customerPhone),
     });
     const updated = await updateVerificationSession(session.id, {
       twilio_verification_sid: verification.sid,
@@ -310,7 +394,9 @@ async function resendOrderVerification(sessionId) {
   } catch (error) {
     console.error('[orderVerificationService] failed to resend Twilio Verify verification', {
       sessionId: session.id,
-      phone: maskPhoneNumber(session.customerPhone),
+      deliveryStage: 'resend',
+      failureType: classifyTwilioFailure(error),
+      retryable: isRetryableTwilioError(error),
       code: error?.code,
       status: error?.status,
       message: error?.message,
@@ -327,6 +413,17 @@ async function confirmOrderVerification(sessionId, code) {
   const session = await getVerificationSessionById(sessionId);
   if (!session) {
     throw ApiError.notFound('Verification session not found');
+  }
+  const completedOrder = await resolveOrderForVerificationSession(session);
+  if (completedOrder && (session.status === 'consumed' || session.status === 'processing')) {
+    return {
+      verification: toSessionResponse(session),
+      order: completedOrder,
+      automation: null,
+      notification: null,
+      smsNotification: null,
+      notifications: null,
+    };
   }
   if (session.status === 'consumed') {
     throw ApiError.conflict('Verification session has already been consumed');
@@ -349,25 +446,44 @@ async function confirmOrderVerification(sessionId, code) {
     throw ApiError.badRequest('code is required');
   }
 
-  await updateVerificationSession(session.id, { status: 'processing' });
+  const claimedSession = await claimVerificationSessionForProcessing(session.id);
+  if (!claimedSession) {
+    const refreshed = await getVerificationSessionById(session.id);
+    const existingOrder = await resolveOrderForVerificationSession(refreshed);
+    if (existingOrder && (refreshed?.status === 'consumed' || refreshed?.status === 'processing')) {
+      return {
+        verification: toSessionResponse(refreshed),
+        order: existingOrder,
+        automation: null,
+        notification: null,
+        smsNotification: null,
+        notifications: null,
+      };
+    }
+    if (refreshed?.status === 'processing') {
+      throw ApiError.conflict('Verification is already being processed');
+    }
+    if (refreshed?.status === 'consumed') {
+      throw ApiError.conflict('Verification session has already been consumed');
+    }
+    if (refreshed?.status === 'failed') {
+      throw ApiError.badRequest('Verification session has failed');
+    }
+    throw ApiError.conflict('Verification session could not be claimed');
+  }
 
   try {
-    const check = await getVerifyService().verificationChecks.create({
-      to: session.customerPhone,
-      code: String(code).trim(),
-    });
+    const check = await checkVerificationWithTimeout(session.customerPhone, code);
     console.log('[orderVerificationService] Twilio Verify check status', {
       sessionId: session.id,
       verificationSid: check.sid || null,
       status: check.status || null,
-      phone: maskPhoneNumber(session.customerPhone),
     });
     if (check.status !== 'approved') {
       const nextAttempts = session.attemptCount + 1;
       const isExhausted = nextAttempts >= session.maxAttempts;
       console.warn('[orderVerificationService] Twilio Verify code rejected', {
         sessionId: session.id,
-        phone: maskPhoneNumber(session.customerPhone),
         attemptCount: nextAttempts,
         maxAttempts: session.maxAttempts,
         twilioStatus: check.status || null,
@@ -384,10 +500,23 @@ async function confirmOrderVerification(sessionId, code) {
     if (error?._otpFailure) {
       throw error;
     }
+    if (isRetryableTwilioError(error)) {
+      console.warn('[orderVerificationService] Twilio Verify check timed out or was retryable', {
+        sessionId: session.id,
+        failureType: classifyTwilioFailure(error),
+        retryable: true,
+        code: error?.code,
+        status: error?.status,
+        message: error?.message,
+      });
+      await updateVerificationSession(session.id, { status: 'pending' });
+      throw error;
+    }
     if (error?.status && error.status < 500) {
       console.warn('[orderVerificationService] Twilio Verify check failed', {
         sessionId: session.id,
-        phone: maskPhoneNumber(session.customerPhone),
+        failureType: classifyTwilioFailure(error),
+        retryable: false,
         code: error?.code,
         status: error?.status,
         message: error?.message,
@@ -409,27 +538,58 @@ async function confirmOrderVerification(sessionId, code) {
 
   console.log('[orderVerificationService] OTP approved, creating final order', {
     sessionId: session.id,
-    phone: maskPhoneNumber(session.customerPhone),
     restaurantId: session.restaurantId,
+    attemptCount: session.attemptCount,
   });
 
+  let order;
   try {
-    const order = await createOrder(session.pendingOrderPayload || {});
+    order = await createOrder(session.pendingOrderPayload || {});
+  } catch (error) {
+    await updateVerificationSession(session.id, { status: 'pending' });
+    throw error;
+  }
+
+  const createdOrder = order.order || order;
+  try {
     const completed = await updateVerificationSession(session.id, {
       status: 'consumed',
       verified_at: new Date(),
+      order_id: createdOrder.id,
+      order_number: createdOrder.orderNumber,
     });
 
     return {
       verification: toSessionResponse(completed),
-      order: order.order || order,
+      order: createdOrder,
       automation: order.automation || null,
       notification: order.notification || null,
       smsNotification: order.smsNotification || null,
       notifications: order.notifications || null,
     };
   } catch (error) {
-    await updateVerificationSession(session.id, { status: 'pending' });
+    try {
+      const failed = await updateVerificationSession(session.id, {
+        status: 'failed',
+        verified_at: new Date(),
+        order_id: createdOrder.id,
+        order_number: createdOrder.orderNumber,
+      });
+      console.warn('[orderVerificationService] final verification update failed after order creation', {
+        sessionId: session.id,
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
+        sessionStatus: failed?.status || 'failed',
+      });
+    } catch (recoveryError) {
+      console.error('[orderVerificationService] failed to persist order reference after confirmation', {
+        sessionId: session.id,
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
+        code: recoveryError?.code,
+        message: recoveryError?.message,
+      });
+    }
     throw error;
   }
 }

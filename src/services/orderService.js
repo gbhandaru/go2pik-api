@@ -12,6 +12,10 @@ const {
 } = require('./notificationService');
 const { validateScheduledPickupTime } = require('../utils/pickupHours');
 const {
+  buildOrderRequestFingerprint,
+  createRecentResultCache,
+} = require('../utils/orderIdempotency');
+const {
   createOrder: createOrderRecord,
   getOrderById: fetchOrderById,
   getOrderByOrderNumber: fetchOrderByOrderNumber,
@@ -30,6 +34,11 @@ const SUPPORTED_ORDER_STATUSES = new Set([
   'rejected',
   'cancelled',
 ]);
+
+const orderCreationCache = createRecentResultCache({
+  ttlMs: 2 * 60 * 1000,
+  maxEntries: 256,
+});
 
 function deriveEmailFromCustomer(customer = {}) {
   const candidates = [customer.email, customer.username, customer.name];
@@ -57,8 +66,15 @@ function normalizeMenuItems(items, restaurant) {
       const missingLabel = item.name || item.sku || 'unknown item';
       throw ApiError.badRequest(`${missingLabel} is not on ${restaurant.name}'s menu`);
     }
+    if (menuItem.is_available === false || menuItem.isAvailable === false) {
+      const unavailableLabel = item.name || item.sku || menuItem.name || 'unknown item';
+      throw ApiError.badRequest(`${unavailableLabel} is currently unavailable`);
+    }
     const quantity = Math.max(1, Number(item.quantity) || 1);
     const price = Number(menuItem.price);
+    if (!Number.isFinite(price)) {
+      throw ApiError.badRequest(`${menuItem.name || item.name || 'Item'} has an invalid price`);
+    }
     const lineTotal = Number((quantity * price).toFixed(2));
     return {
       id: menuItem.id,
@@ -173,74 +189,108 @@ function formatOrderAmounts(order) {
 
 async function createOrder(payload = {}) {
   const draft = await prepareOrderDraft(payload);
+  const fingerprint = buildOrderRequestFingerprint(draft);
+  return orderCreationCache.run(fingerprint, () => createOrderWithoutDedup(draft, payload));
+}
+
+async function createOrderWithoutDedup(draft, payload = {}) {
   const { restaurant, customer, items, totals } = draft;
   const { subtotal, tax, total } = totals;
   let promotion = null;
-  if (draft.promoCode) {
-    const validation = await validatePromotion({
-      promoCode: draft.promoCode,
-      customerPhone: customer.phone,
-      orderAmount: total,
-      restaurantId: restaurant.id,
-    });
-    if (!validation.valid) {
-      throw ApiError.badRequest(validation.message || 'Promo code is invalid or already used');
-    }
-    promotion = validation;
-  }
-  const orderId = await createOrderRecord({
+  console.log('[orderService] create order started', {
     restaurantId: restaurant.id,
-    customer,
-    items,
-    totals,
-    promotion: promotion
-      ? {
-          promotionId: promotion.promotionId,
-          promotionCode: promotion.promoCode,
-          discountAmount: promotion.discountAmount,
-          finalAmount: promotion.finalAmount,
-          customerPhone: promotion.customerPhone || customer.phone || null,
-        }
-      : null,
+    itemCount: items.length,
+    pickupType: draft.pickupType || null,
+    hasPromoCode: Boolean(draft.promoCode),
+    smsConsent: Boolean(customer.smsConsent),
+    customerEmailPresent: Boolean(customer.email),
+    customerPhonePresent: Boolean(customer.phone),
   });
-  const automationResult = await runOrderAutomation({
-    restaurant,
-    customer,
-    items,
-    subtotal,
-    tax,
-    total,
-  });
-  const persisted = await getOrderById(orderId);
-  const notificationOrder = {
-    ...persisted,
-    customer: {
-      ...(persisted.customer || {}),
-      pickupDisplayTime: draft.customer?.pickupDisplayTime || null,
-    },
-    pickupRequest: draft.pickupRequest || payload.pickupRequest || null,
-  };
-  console.log('[orderService] preparing notification', {
-    orderId,
-    orderNumber: persisted.orderNumber,
-    customerEmail: persisted.customer?.email,
-    customerPhone: persisted.customer?.phone,
-    notificationsProvider: config.notifications.provider,
-  });
-  const [emailNotification, smsNotification] = await Promise.all([
-    sendOrderConfirmationEmail(notificationOrder),
-    sendOrderConfirmationSms(notificationOrder),
-  ]);
-  return {
-    order: persisted,
-    automation: automationResult,
-    notification: emailNotification,
-    smsNotification,
-    notifications: {
-      email: emailNotification,
-      sms: smsNotification,
-    },
-  };
+  try {
+    if (draft.promoCode) {
+      const validation = await validatePromotion({
+        promoCode: draft.promoCode,
+        customerPhone: customer.phone,
+        orderAmount: total,
+        restaurantId: restaurant.id,
+      });
+      if (!validation.valid) {
+        throw ApiError.badRequest(validation.message || 'Promo code is invalid or already used');
+      }
+      promotion = validation;
+    }
+    const orderId = await createOrderRecord({
+      restaurantId: restaurant.id,
+      customer,
+      items,
+      totals,
+      promotion: promotion
+        ? {
+            promotionId: promotion.promotionId,
+            promotionCode: promotion.promoCode,
+            discountAmount: promotion.discountAmount,
+            finalAmount: promotion.finalAmount,
+            customerPhone: promotion.customerPhone || customer.phone || null,
+          }
+        : null,
+    });
+    const automationResult = await runOrderAutomation({
+      restaurant,
+      customer,
+      items,
+      subtotal,
+      tax,
+      total,
+    });
+    const persisted = await getOrderById(orderId);
+    const notificationOrder = {
+      ...persisted,
+      customer: {
+        ...(persisted.customer || {}),
+        pickupDisplayTime: draft.customer?.pickupDisplayTime || null,
+      },
+      pickupRequest: draft.pickupRequest || payload.pickupRequest || null,
+    };
+    const [emailNotification, smsNotification] = await Promise.all([
+      sendOrderConfirmationEmail(notificationOrder),
+      sendOrderConfirmationSms(notificationOrder),
+    ]);
+    console.log('[orderService] create order completed', {
+      orderId,
+      orderNumber: persisted.orderNumber,
+      restaurantId: restaurant.id,
+      itemCount: items.length,
+      promotionApplied: Boolean(promotion),
+      automationRan: Boolean(automationResult),
+      emailDelivered: emailNotification?.delivered === true,
+      smsDelivered: smsNotification?.delivered === true,
+      emailReason: emailNotification?.reason || null,
+      smsReason: smsNotification?.reason || null,
+      notificationsProvider: config.notifications.provider,
+    });
+    return {
+      order: persisted,
+      automation: automationResult,
+      notification: emailNotification,
+      smsNotification,
+      notifications: {
+        email: emailNotification,
+        sms: smsNotification,
+      },
+    };
+  } catch (error) {
+    console.error('[orderService] create order failed', {
+      restaurantId: restaurant.id,
+      itemCount: items.length,
+      pickupType: draft.pickupType || null,
+      hasPromoCode: Boolean(draft.promoCode),
+      smsConsent: Boolean(customer.smsConsent),
+      code: error?.code || null,
+      status: error?.status || null,
+      message: error?.message || null,
+    });
+    throw error;
+  }
 }
 
 async function prepareOrderDraft(payload = {}) {
@@ -350,7 +400,7 @@ async function prepareOrderDraft(payload = {}) {
       }
     } else {
       console.warn('[orderService] customer email missing and could not be derived', {
-        customerName: customer.name,
+        customerNamePresent: Boolean(customer.name),
       });
     }
   }

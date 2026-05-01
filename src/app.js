@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config/env');
 const buildCorsOptions = require('./config/cors');
+const requestLogger = require('./middlewares/requestLogger');
 const notFound = require('./middlewares/notFound');
 const errorHandler = require('./middlewares/errorHandler');
 const { sendTestEmail } = require('./services/notificationService');
@@ -21,12 +22,7 @@ const healthRoutes = require('./routes/healthRoutes');
 
 const app = express();
 
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    console.log(`${req.method} ${req.originalUrl} ${res.statusCode}`);
-  });
-  next();
-});
+app.use(requestLogger);
 app.use(cors(buildCorsOptions()));
 app.use(express.json());
 

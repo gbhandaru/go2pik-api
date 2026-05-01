@@ -120,6 +120,7 @@ const config = {
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
     messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID || '',
     verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || '',
+    requestTimeoutMs: number(process.env.TWILIO_REQUEST_TIMEOUT_MS, 8000),
   },
   notifications: (function buildNotificationsConfig() {
   const sendgrid = {

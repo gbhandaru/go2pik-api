@@ -104,13 +104,12 @@ async function sendPartialAcceptanceSms(order) {
   if (!isE164PhoneNumber(normalizedPhone)) {
     console.warn('[notification] skipping partial acceptance SMS: invalid phone format', {
       orderNumber: order?.orderNumber || null,
-      phone: normalizedPhone,
+      phonePresent: true,
     });
     return {
       delivered: false,
       skipped: true,
       reason: 'invalid_customer_phone_format',
-      phone: normalizedPhone,
     };
   }
   if (!isSmsConfigured()) {
@@ -127,7 +126,7 @@ async function sendPartialAcceptanceSms(order) {
   });
   console.log('[notification] partial acceptance SMS delivered', {
     orderNumber: order?.orderNumber || null,
-    to: normalizedPhone,
+    deliveryChannel: 'sms',
     messageSid: result?.sid || null,
   });
   return {
@@ -251,8 +250,8 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
     throw new Error('SendGrid API key missing');
   }
   console.log('[notification] deliverViaSendgrid starting', {
-    to: to?.email,
-    subject,
+    hasRecipientEmail: Boolean(to?.email),
+    template: metadata?.template || null,
   });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -288,7 +287,8 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
       throw error;
     }
     console.log('[notification] deliverViaSendgrid completed', {
-      to: to?.email,
+      hasRecipientEmail: Boolean(to?.email),
+      template: metadata?.template || null,
       status: response.status,
     });
     return { ok: true, response: bodyText, status: response.status };
@@ -300,8 +300,8 @@ async function deliverViaSendgrid({ to, subject, text, html, metadata }) {
 async function deliverEmail(options) {
   console.log('[notification] deliverEmail invoked', {
     provider: config.notifications.provider,
-    to: options?.to?.email,
-    subject: options?.subject,
+    hasRecipientEmail: Boolean(options?.to?.email),
+    template: options?.metadata?.template || null,
   });
   if (config.notifications.provider === 'sendgrid') {
     return deliverViaSendgrid(options);
@@ -311,7 +311,7 @@ async function deliverEmail(options) {
 
 async function sendTestEmail(toEmail) {
   console.log('[notification] sendTestEmail invoked', {
-    toEmail,
+    recipientProvided: Boolean(toEmail),
     provider: config.notifications.provider,
   });
   if (!toEmail) {
@@ -343,7 +343,7 @@ async function sendTestEmail(toEmail) {
   };
   const result = await deliverViaSendgrid(payload);
   console.log('[notification] sendTestEmail completed', {
-    toEmail,
+    recipientProvided: true,
     status: result.status,
   });
   return { provider: 'sendgrid', status: result.status, response: result.response };
@@ -352,7 +352,7 @@ async function sendTestEmail(toEmail) {
 async function sendWelcomeEmail(customer = {}) {
   console.log('[notification] sendWelcomeEmail called', {
     customerId: customer?.id,
-    email: customer?.email,
+    customerEmailPresent: Boolean(customer?.email),
   });
   if (!customer || !customer.email) {
     console.log('[notification] skipping welcome email: missing customer email', {
@@ -378,14 +378,14 @@ async function sendWelcomeEmail(customer = {}) {
     });
     console.log('[notification] welcome email delivered', {
       customerId: customer.id,
-      email: customer.email,
+      customerEmailPresent: true,
       status: result.status || 'ok',
     });
     return { delivered: true };
   } catch (error) {
     console.error('[notification] welcome email failed', {
       customerId: customer.id,
-      email: customer.email,
+      customerEmailPresent: true,
       error: error.message,
     });
     return { delivered: false, reason: 'provider_error', error: error.message };
@@ -395,7 +395,7 @@ async function sendWelcomeEmail(customer = {}) {
 async function sendOrderConfirmationEmail(order) {
   console.log('[notification] sendOrderConfirmationEmail called', {
     orderNumber: order?.orderNumber,
-    customerEmail: order?.customer?.email,
+    customerEmailPresent: Boolean(order?.customer?.email),
   });
   if (!order || !order.customer || !order.customer.email) {
     console.log('[notification] skipping email delivery: missing customer email', {
@@ -424,7 +424,7 @@ async function sendOrderConfirmationEmail(order) {
     });
     console.log('[notification] order email delivered', {
       orderNumber: order.orderNumber,
-      customerEmail: order.customer.email,
+      customerEmailPresent: true,
       provider: config.notifications.provider,
       status: result.status || 'ok',
     });
@@ -432,7 +432,7 @@ async function sendOrderConfirmationEmail(order) {
   } catch (error) {
     console.error('[notification] email send failed', {
       orderNumber: order.orderNumber,
-      customerEmail: order.customer.email,
+      customerEmailPresent: true,
       provider: config.notifications.provider,
       error: error.message,
       responseBody: error.responseBody,
@@ -445,7 +445,7 @@ async function sendOrderConfirmationEmail(order) {
 async function sendOrderConfirmationSms(order) {
   console.log('[notification] sendOrderConfirmationSms called', {
     orderNumber: order?.orderNumber,
-    customerPhone: order?.customer?.phone,
+    customerPhonePresent: Boolean(order?.customer?.phone),
   });
   const rawPhone = order?.smsConsentPhone || order?.customer?.phone || '';
   const normalizedPhone = normalizePhoneNumber(rawPhone);
@@ -458,15 +458,16 @@ async function sendOrderConfirmationSms(order) {
   if (!normalizedPhone) {
     console.log('[notification] skipping confirmation SMS: missing customer phone', {
       orderNumber: order?.orderNumber,
+      customerPhonePresent: Boolean(rawPhone),
     });
     return { delivered: false, reason: 'missing_customer_phone' };
   }
   if (!isE164PhoneNumber(normalizedPhone)) {
     console.log('[notification] skipping confirmation SMS: invalid phone format', {
       orderNumber: order?.orderNumber,
-      phone: normalizedPhone,
+      phonePresent: true,
     });
-    return { delivered: false, reason: 'invalid_customer_phone_format', phone: normalizedPhone };
+    return { delivered: false, reason: 'invalid_customer_phone_format' };
   }
   if (!isSmsConfigured()) {
     console.log('[notification] skipping confirmation SMS: Twilio not configured', {
@@ -490,12 +491,12 @@ async function sendOrderConfirmationSms(order) {
     });
     console.log('[notification] order confirmation SMS sent successfully', {
       orderNumber: order?.orderNumber,
-      to: normalizedPhone,
+      deliveryChannel: 'sms',
       messageSid: result?.sid || null,
     });
     console.log('[notification] order confirmation SMS delivered', {
       orderNumber: order?.orderNumber,
-      to: normalizedPhone,
+      deliveryChannel: 'sms',
       messageSid: result?.sid || null,
     });
     return {
@@ -507,7 +508,7 @@ async function sendOrderConfirmationSms(order) {
   } catch (error) {
     console.error('[notification] confirmation SMS failed', {
       orderNumber: order?.orderNumber,
-      phone: normalizedPhone,
+      phonePresent: true,
       error: error.message,
       responseBody: error.responseBody,
       statusCode: error.statusCode,
@@ -523,7 +524,7 @@ async function sendOrderConfirmationSms(order) {
 async function sendReadyForPickupSms(order) {
   console.log('[notification] sendReadyForPickupSms called', {
     orderNumber: order?.orderNumber,
-    customerPhone: order?.customer?.phone,
+    customerPhonePresent: Boolean(order?.customer?.phone),
   });
   const rawPhone = order?.smsConsentPhone || order?.customer?.phone || '';
   const normalizedPhone = normalizePhoneNumber(rawPhone);
@@ -536,15 +537,16 @@ async function sendReadyForPickupSms(order) {
   if (!normalizedPhone) {
     console.log('[notification] skipping ready SMS: missing customer phone', {
       orderNumber: order?.orderNumber,
+      customerPhonePresent: Boolean(rawPhone),
     });
     return { delivered: false, reason: 'missing_customer_phone' };
   }
   if (!isE164PhoneNumber(normalizedPhone)) {
     console.log('[notification] skipping ready SMS: invalid phone format', {
       orderNumber: order?.orderNumber,
-      phone: normalizedPhone,
+      phonePresent: true,
     });
-    return { delivered: false, reason: 'invalid_customer_phone_format', phone: normalizedPhone };
+    return { delivered: false, reason: 'invalid_customer_phone_format' };
   }
   if (!isSmsConfigured()) {
     console.log('[notification] skipping ready SMS: Twilio not configured', {
@@ -568,7 +570,7 @@ async function sendReadyForPickupSms(order) {
     });
     console.log('[notification] ready SMS delivered', {
       orderNumber: order?.orderNumber,
-      to: normalizedPhone,
+      deliveryChannel: 'sms',
       messageSid: result?.sid || null,
     });
     return {
@@ -580,7 +582,7 @@ async function sendReadyForPickupSms(order) {
   } catch (error) {
     console.error('[notification] ready SMS failed', {
       orderNumber: order?.orderNumber,
-      phone: normalizedPhone,
+      phonePresent: true,
       error: error.message,
       responseBody: error.responseBody,
       statusCode: error.statusCode,

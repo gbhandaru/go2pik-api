@@ -1,5 +1,6 @@
 const ApiError = require('../utils/errors');
 const config = require('../config/env');
+const { withTimeout } = require('../utils/timeout');
 
 let twilioFactory = null;
 
@@ -30,7 +31,11 @@ async function fetchTwilioAccountDetails() {
     throw ApiError.badRequest('Twilio configuration is incomplete');
   }
   const client = getTwilioClient();
-  const account = await client.api.v2010.accounts(accountSid).fetch();
+  const account = await withTimeout(
+    () => client.api.v2010.accounts(accountSid).fetch(),
+    config.twilio?.requestTimeoutMs,
+    'Twilio account lookup timed out'
+  );
   return {
     sid: account.sid,
     friendlyName: account.friendlyName,
@@ -39,7 +44,7 @@ async function fetchTwilioAccountDetails() {
   };
 }
 
-async function sendSms({ to, body }) {
+async function sendSms({ to, body, timeoutMs = config.twilio?.requestTimeoutMs }) {
   const { phoneNumber, messagingServiceSid } = config.twilio || {};
   if (!messagingServiceSid && !phoneNumber) {
     throw ApiError.badRequest('TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER is not configured');
@@ -54,7 +59,11 @@ async function sendSms({ to, body }) {
   } else {
     payload.from = phoneNumber;
   }
-  return client.messages.create(payload);
+  return withTimeout(
+    () => client.messages.create(payload),
+    timeoutMs,
+    'Twilio SMS send timed out'
+  );
 }
 
 module.exports = {
