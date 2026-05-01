@@ -171,12 +171,12 @@ function buildOrderEmail(order) {
 
 function buildOrderConfirmationSms(order) {
   const restaurantName = order.restaurant?.name || 'Go2Pik';
-  return `Order received from ${restaurantName}. We will notify you when it's ready.`;
+  return `Go2Pik: Your order at ${restaurantName} is confirmed. We'll notify you when it's ready.`;
 }
 
 function buildReadyForPickupSms(order) {
   const restaurantName = order.restaurant?.name || 'Go2Pik';
-  return `Your order from ${restaurantName} is ready for pickup. Skip the wait with Go2Pik.`;
+  return `Go2Pik: Your order at ${restaurantName} is ready. Skip the wait - pick up now.`;
 }
 
 function buildWelcomeEmail(customer = {}) {
